@@ -1,0 +1,66 @@
+schema: spec-driven
+
+# Project context injected into every OpenSpec planning artifact.
+# Product source of truth for intent: REQUIREMENTS.md (keep in sync when stack/deploy changes).
+context: |
+  Language: zh
+  All artifacts must be written in zh.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+
+  Product: 智能出题与判分 Agent（家长端移动 Web）
+  Summary: 双入口出题（按教材 / 对话）→ HITL 确认 → 可打印 PDF → 拍照上传判分 → 成绩记录
+  Product form: Mobile Web only (phone browser); no desktop-first UI.
+  Design refs: docs/mockups/ (esp. alt-ink-amber); REQUIREMENTS.md is the product brief.
+
+  Tech stack (phase 1):
+  - Frontend: Vite + React + TypeScript SPA, React Router, Tailwind (mobile-first)
+  - Backend: Python FastAPI (JWT/OAuth2); streaming SSE; file upload
+  - Agent A (textbook): LangGraph fixed StateGraph + RAG
+  - Agent B (chat): DeepAgents (LangGraph-based) multi-turn
+  - Runtime: LangGraph Checkpointer; production MUST use Postgres (no in-memory)
+  - Agents run IN-PROCESS inside FastAPI (ainvoke / astream / resume); do NOT deploy a separate Agent service
+  - DB: PostgreSQL + pgvector (business + RAG); SQLAlchemy/SQLModel
+  - Object storage: local disk in dev; S3-compatible in prod (textbooks, answer photos, generated PDFs)
+  - PDF export: WeasyPrint / ReportLab / Playwright HTML→PDF (Docker image needs system libs)
+  - LLM: OpenAI / Anthropic Claude (text + vision grading)
+
+  Deploy (phase 1):
+  - Docker Compose: Nginx (static Vite build) + FastAPI + PostgreSQL(+pgvector) + object storage
+  - Reverse proxy: HTTPS, large uploads, long timeouts for streaming
+  - Phase 2 only: worker queue for PDF/grading; LangGraph Platform; Next.js if SEO/SSR needed
+
+  Architecture constraints:
+  - Home has two clear entries (textbook vs chat); shared downstream after confirm
+  - Prefer shared tools/subgraphs for PDF + grading; avoid duplicating two full stacks
+  - thread_id ties one practice session across HITL interrupt/resume
+  - Comments in code: English; user-facing copy: Chinese
+
+  Repo status: early / mostly greenfield (REQUIREMENTS + mockups). Prefer small vertical slices over big-bang.
+
+rules:
+  proposal:
+    - 对照 REQUIREMENTS.md：标明本期范围与明确 Non-goals（尤其不要一期做的二期项）
+    - 说明影响前端 / FastAPI / Agent（A 或 B 或共用）/ 数据与存储中的哪些层
+    - 若涉及长任务（出题、判分、PDF），写明流式或超时策略
+  specs:
+    - 使用 Given/When/Then（或等价 Scenario）描述家长可观察行为
+    - 能力命名用 kebab-case；优先按领域拆分（如 textbook-generation、chat-generation、grading、pdf-export）
+    - 引用现有模式后再发明新抽象；Agent 默认嵌入 FastAPI，除非 proposal 明确要拆服务
+  design:
+    - 复杂流程（HITL、流式、RAG）用简短序列说明或 ASCII 图
+    - 写清 Checkpointer / thread_id / 业务表各自存什么
+    - 点名密钥与外部依赖（LLM、对象存储），勿把密钥写进仓库
+  tasks:
+    - 任务可独立验证；先垂直切片可演示路径，再补边缘情况
+    - 涉及 PDF 引擎或系统库时单独列出 Docker/镜像任务
+    - 不要默认引入 Next.js、独立 Agent 服务或任务队列，除非本 change 明确批准
+
+operations:
+  apply:
+    guidance:
+      - 先实现可演示的家长路径，再补完善性
+      - 保持 Agent 在 FastAPI 进程内，除非 tasks 明确要求拆分
+      - 生产相关代码不要用内存 Checkpointer
+  archive:
+    guidance:
+      - 归档前确认 main specs 与 REQUIREMENTS.md 无重大冲突；有冲突时在归档说明里指出
