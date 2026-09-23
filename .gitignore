@@ -3,6 +3,7 @@ node_modules
 node_modules/
 .venv/
 venv/
+apps/**/.venv/
 __pycache__/
 *.py[cod]
 .Python
@@ -17,6 +18,7 @@ build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+apps/web/dist/
 
 # Env & secrets
 .env
@@ -34,3 +36,6 @@ Thumbs.db
 *.log
 coverage/
 .coverage
+
+# Local textbook PDFs
+book/
