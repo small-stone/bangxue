@@ -1,15 +1,21 @@
 import { Route, Routes } from 'react-router-dom'
+import Config from './pages/Config'
+import Home from './pages/Home'
+import Placeholder from './pages/Placeholder'
+import Range from './pages/Range'
+import Result from './pages/Result'
+import Select from './pages/Select'
 
 export default function App() {
   return (
-    <div className="min-h-dvh bg-stone-50 text-stone-900">
-      <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-3 px-6">
-        <h1 className="text-2xl font-semibold tracking-tight">帮学</h1>
-        <p className="text-sm text-stone-600">家长端移动 Web 脚手架已就绪。</p>
-        <Routes>
-          <Route path="/" element={<p className="text-sm text-stone-500">首页占位</p>} />
-        </Routes>
-      </main>
-    </div>
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/textbook" element={<Select />} />
+      <Route path="/textbook/range" element={<Range />} />
+      <Route path="/textbook/config" element={<Config />} />
+      <Route path="/textbook/result" element={<Result />} />
+      <Route path="/scores" element={<Placeholder title="成绩" active="scores" />} />
+      <Route path="/me" element={<Placeholder title="我的" active="me" />} />
+    </Routes>
   )
 }

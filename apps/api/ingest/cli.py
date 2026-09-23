@@ -4,6 +4,10 @@ import argparse
 import sys
 from pathlib import Path
 
+from bangxue_env import load_repo_env
+
+load_repo_env()
+
 from ingest.embed import embed_texts, embedding_dimension
 from ingest.parse import extract_pages
 from ingest.split import UnitSplitError, split_pages

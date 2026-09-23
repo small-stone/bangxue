@@ -21,8 +21,10 @@ cd apps/api
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 export DATABASE_URL=postgresql://bangxue:bangxue@127.0.0.1:5432/bangxue
-# EMBEDDING_PROVIDER=local 使用 BAAI/bge-small-zh-v1.5（默认）
-# EMBEDDING_PROVIDER=openai 时还需要 OPENAI_API_KEY
+# 模型名和百炼密钥在仓库根目录 .env：
+# QUIZ_MODEL=qwen3.7-plus
+# EMBEDDING_MODEL=qwen3.7-text-embedding
+# EMBEDDING_PROVIDER=bailian
 python -m ingest ingest \
   --pdf /path/to/book.pdf \
   --stage 小学 --grade 一年级 --subject 数学 --edition 人教版 --term 上册
@@ -42,6 +44,10 @@ cd apps/api
 python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+export DATABASE_URL=postgresql://bangxue:bangxue@127.0.0.1:5432/bangxue
+# 出题读取仓库根目录 .env 里的 bailian_api_key；没有密钥时接口返回配置错误，不会编造题目
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 # GET http://127.0.0.1:8000/health → {"status":"ok"}
+# GET /api/textbooks/units  列出一年级数学人教版上册单元
+# POST /api/quizzes         按单元出题
 ```
