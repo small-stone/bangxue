@@ -5,6 +5,7 @@ import { PageNav } from '../chrome'
 import { ChevronRight } from '../icons'
 
 const GRADES = ['一年级', '二年级', '三年级', '四年级', '五年级', '六年级']
+const TERMS = ['上册', '下册'] as const
 const SUBJECTS = [
   { name: '语文', hint: '阅读与表达' },
   { name: '数学', hint: '逻辑与计算' },
@@ -35,7 +36,7 @@ export default function Select() {
       <div className="page">
         <PageNav title="按教材出题" badge="方式 A" />
         <div className="banner">紧扣课本单元出题</div>
-        {!ready ? <p className="notice">目前只能出小学一年级数学人教版上册</p> : null}
+        {!ready ? <p className="notice">目前只开放小学数学人教版一年级至六年级的上册或下册</p> : null}
         <div className="seg">
           {(['小学', '初中'] as const).map((stage) => (
             <button key={stage} type="button" className={draft.stage === stage ? 'on' : ''} onClick={() => update({ stage })}>
@@ -48,6 +49,14 @@ export default function Select() {
           {GRADES.map((grade) => (
             <button key={grade} type="button" className={draft.grade === grade ? 'chip on' : 'chip'} onClick={() => update({ grade })}>
               {grade}
+            </button>
+          ))}
+        </div>
+        <div className="label">选择学期</div>
+        <div className="chips">
+          {TERMS.map((term) => (
+            <button key={term} type="button" className={draft.term === term ? 'chip on' : 'chip'} onClick={() => update({ term })}>
+              {term}
             </button>
           ))}
         </div>

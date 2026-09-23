@@ -73,6 +73,7 @@ export default function Range() {
         <PageNav title="选择出题范围" />
         <div className="ctx">
           <span className="tag">{draft.grade}</span>
+          <span className="tag">{draft.term}</span>
           <span className="tag">{draft.subject}</span>
           <span className="tag">{draft.edition}</span>
         </div>

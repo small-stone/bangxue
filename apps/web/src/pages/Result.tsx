@@ -27,21 +27,23 @@ export default function Result() {
           可以打印啦
         </div>
       </header>
-      <div className="result-scroll">
+      <div className="result-frame">
         <article className="paper-sheet">
-          <h2>{quiz.title}</h2>
-          <p className="sub">姓名 ________</p>
-          {quiz.questions.map((question, index) => (
-            <p className="q" key={`${index}-${question.stem}`}>
-              {index + 1}. {question.stem}
-              {quiz.includeAnswers && question.answer ? <span className="answer"> 答案：{question.answer}</span> : null}
-            </p>
-          ))}
-          <div className="chips" style={{ marginTop: 14 }}>
-            <span className="tag">教材</span>
-            <span className="tag">{quiz.count} 题</span>
-            <span className="tag">{quiz.difficulty}</span>
-            {quiz.includeAnswers ? <span className="tag">含答案卷</span> : null}
+          <div className="paper-scroll">
+            <h2>{quiz.title}</h2>
+            <p className="sub">姓名 ________</p>
+            {quiz.questions.map((question, index) => (
+              <p className="q" key={`${index}-${question.stem}`}>
+                {index + 1}. {question.stem}
+                {quiz.includeAnswers && question.answer ? <span className="answer"> 答案：{question.answer}</span> : null}
+              </p>
+            ))}
+            <div className="chips" style={{ marginTop: 14 }}>
+              <span className="tag">教材</span>
+              <span className="tag">{quiz.count} 题</span>
+              <span className="tag">{quiz.difficulty}</span>
+              {quiz.includeAnswers ? <span className="tag">含答案卷</span> : null}
+            </div>
           </div>
         </article>
       </div>

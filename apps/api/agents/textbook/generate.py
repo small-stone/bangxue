@@ -1,4 +1,4 @@
-"""Grade-one math question generation from ingested textbook chunks."""
+"""Grade-one through grade-six primary math generation from ingested chunks."""
 
 import json
 import os
@@ -8,13 +8,8 @@ import psycopg
 
 from ingest.store import connect
 
-ALLOWED_BOOK = {
-    "stage": "小学",
-    "grade": "一年级",
-    "subject": "数学",
-    "edition": "人教版",
-    "term": "上册",
-}
+PRIMARY_GRADES = {"一年级", "二年级", "三年级", "四年级", "五年级", "六年级"}
+PRIMARY_TERMS = {"上册", "下册"}
 
 Generator = Callable[..., list[dict]]
 
@@ -28,22 +23,29 @@ class TextbookError(Exception):
 
 
 def is_allowed_book(**meta: str) -> bool:
-    return all(meta.get(key) == value for key, value in ALLOWED_BOOK.items())
+    return (
+        meta.get("stage") == "小学"
+        and meta.get("subject") == "数学"
+        and meta.get("edition") == "人教版"
+        and meta.get("grade") in PRIMARY_GRADES
+        and meta.get("term") in PRIMARY_TERMS
+    )
 
 
 def list_units(**meta: str) -> list[str]:
-    if not is_allowed_book(**meta):
-        raise TextbookError("目前只能出小学一年级数学人教版上册。")
+    _require_primary_math(**meta)
     try:
         with connect() as conn:
-            return _unit_names(conn, meta)
+            names = _unit_names(conn, meta)
     except RuntimeError as exc:
         raise TextbookError(str(exc), 503) from exc
+    if not names:
+        raise TextbookError("该册尚未入库，请先完成教材入库。", 404)
+    return names
 
 
 def load_unit_text(units: Sequence[str], **meta: str) -> str:
-    if not is_allowed_book(**meta):
-        raise TextbookError("目前只能出小学一年级数学人教版上册。")
+    _require_primary_math(**meta)
     if not units:
         raise TextbookError("请至少选择一个单元。")
     try:
@@ -52,6 +54,8 @@ def load_unit_text(units: Sequence[str], **meta: str) -> str:
         raise TextbookError(str(exc), 503) from exc
     with conn_cm as conn:
         known = set(_unit_names(conn, meta))
+        if not known:
+            raise TextbookError("该册尚未入库，请先完成教材入库。", 404)
         missing = [name for name in units if name not in known]
         if missing:
             raise TextbookError(f"单元尚未入库：{'、'.join(missing)}", 404)
@@ -94,6 +98,7 @@ def generate_questions(
     count: int,
     difficulty: str,
     include_answers: bool,
+    grade: str = "一年级",
     generator: Generator | None = None,
 ) -> list[dict]:
     if count not in {10, 15, 20, 30}:
@@ -105,6 +110,7 @@ def generate_questions(
             count=count,
             difficulty=difficulty,
             include_answers=include_answers,
+            grade=grade,
         )
     except TextbookError:
         raise
@@ -122,6 +128,11 @@ def generate_questions(
             row["answer"] = str(item.get("answer", "")).strip()
         cleaned.append(row)
     return cleaned
+
+
+def _require_primary_math(**meta: str) -> None:
+    if not is_allowed_book(**meta):
+        raise TextbookError("目前只能出小学数学人教版一年级至六年级的上册或下册。")
 
 
 def _unit_names(conn: psycopg.Connection, meta: dict[str, str]) -> list[str]:
@@ -152,6 +163,7 @@ def _bailian_generator(**kwargs) -> list[dict]:
         "https://dashscope.aliyuncs.com/compatible-mode/v1",
     )
     include_answers = kwargs["include_answers"]
+    grade = kwargs.get("grade") or "一年级"
     answer_rule = "每题包含 answer。" if include_answers else "不要包含 answer 字段。"
     client = OpenAI(api_key=api_key, base_url=base_url)
     response = client.chat.completions.create(
@@ -162,7 +174,7 @@ def _bailian_generator(**kwargs) -> list[dict]:
             {
                 "role": "system",
                 "content": (
-                    "你是小学数学出题助手。只根据给定课文出题，不要使用课文以外的知识点。"
+                    f"你是{grade}小学数学出题助手。只根据给定课文出题，不要使用课文以外的知识点。"
                     "返回 JSON：{\"questions\":[{\"qtype\":\"选择题|填空题|计算题\",\"stem\":\"...\"}]}。"
                     f"题目数量必须正好是指定数量。{answer_rule}"
                     "只返回题目 JSON，不要输出思考过程。"

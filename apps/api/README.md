@@ -28,6 +28,8 @@ export DATABASE_URL=postgresql://bangxue:bangxue@127.0.0.1:5432/bangxue
 python -m ingest ingest \
   --pdf /path/to/book.pdf \
   --stage 小学 --grade 一年级 --subject 数学 --edition 人教版 --term 上册
+# 批量入库 book/小学/数学 下全部人教版 PDF：
+python -m ingest ingest-primary-math
 python -m ingest query \
   --stage 小学 --grade 一年级 --subject 数学 --edition 人教版 --term 上册 \
   --unit 第一单元
@@ -48,6 +50,6 @@ export DATABASE_URL=postgresql://bangxue:bangxue@127.0.0.1:5432/bangxue
 # 出题读取仓库根目录 .env 里的 bailian_api_key；没有密钥时接口返回配置错误，不会编造题目
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 # GET http://127.0.0.1:8000/health → {"status":"ok"}
-# GET /api/textbooks/units  列出一年级数学人教版上册单元
+# GET /api/textbooks/units  列出已入库小学数学人教版某册的单元
 # POST /api/quizzes         按单元出题
 ```

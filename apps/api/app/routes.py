@@ -58,6 +58,7 @@ def create_quiz(body: QuizRequest) -> dict:
             count=count,
             difficulty=difficulty,
             include_answers=include_answers,
+            grade=body.grade,
         )
     except TextbookError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc

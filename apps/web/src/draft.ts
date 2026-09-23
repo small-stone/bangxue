@@ -5,7 +5,7 @@ export type Draft = {
   grade: string
   subject: string
   edition: string
-  term: '上册'
+  term: '上册' | '下册'
   scope: ScopeMode
   units: string[]
   count: number
@@ -32,9 +32,11 @@ const DRAFT_KEY = 'bangxue-draft'
 const QUIZ_KEY = 'bangxue-quiz'
 const ERROR_KEY = 'bangxue-quiz-error'
 
+const PRIMARY_GRADES = new Set(['一年级', '二年级', '三年级', '四年级', '五年级', '六年级'])
+
 export const emptyDraft = (): Draft => ({
   stage: '小学',
-  grade: '三年级',
+  grade: '一年级',
   subject: '数学',
   edition: '人教版',
   term: '上册',
@@ -56,7 +58,13 @@ export function saveDraft(draft: Draft) {
 }
 
 export function canContinue(draft: Draft) {
-  return draft.stage === '小学' && draft.grade === '一年级' && draft.subject === '数学' && draft.edition === '人教版'
+  return (
+    draft.stage === '小学' &&
+    draft.subject === '数学' &&
+    draft.edition === '人教版' &&
+    PRIMARY_GRADES.has(draft.grade) &&
+    (draft.term === '上册' || draft.term === '下册')
+  )
 }
 
 export function saveQuiz(quiz: QuizPayload) {

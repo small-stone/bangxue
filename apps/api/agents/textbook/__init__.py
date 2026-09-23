@@ -1,7 +1,8 @@
 """Textbook generation agent, called in-process by FastAPI."""
 
 from agents.textbook.generate import (
-    ALLOWED_BOOK,
+    PRIMARY_GRADES,
+    PRIMARY_TERMS,
     TextbookError,
     generate_questions,
     is_allowed_book,

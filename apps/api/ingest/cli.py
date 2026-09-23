@@ -8,6 +8,12 @@ from bangxue_env import load_repo_env
 
 load_repo_env()
 
+from ingest.catalog import (
+    BookTarget,
+    default_primary_math_root,
+    discover_primary_math_pdfs,
+    parse_primary_math_meta,
+)
 from ingest.embed import embed_texts, embedding_dimension
 from ingest.parse import extract_pages
 from ingest.split import UnitSplitError, split_pages
@@ -19,6 +25,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "ingest":
         return _ingest(args)
+    if args.command == "ingest-primary-math":
+        return _ingest_primary_math(args)
     if args.command == "query":
         return _query(args)
     parser.print_help()
@@ -28,12 +36,22 @@ def main(argv: list[str] | None = None) -> int:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ingest",
-        description="Ingest one textbook PDF into pgvector, or look up one unit.",
+        description="Ingest textbook PDFs into pgvector, or look up one unit.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
     ingest = sub.add_parser("ingest", help="Parse, split, and store one textbook")
     _add_meta(ingest)
     ingest.add_argument("--pdf", required=True, type=Path, help="Path to one textbook PDF")
+    batch = sub.add_parser(
+        "ingest-primary-math",
+        help="Ingest every primary-math PDF under book/小学/数学",
+    )
+    batch.add_argument(
+        "--root",
+        type=Path,
+        default=None,
+        help="Override book/小学/数学 root (default: repo book/小学/数学)",
+    )
     query = sub.add_parser("query", help="Fetch stored chunks for one unit")
     _add_meta(query)
     query.add_argument("--unit", required=True, help="Unit name stored with the chunks")
@@ -49,22 +67,71 @@ def _add_meta(parser: argparse.ArgumentParser) -> None:
 
 
 def _ingest(args: argparse.Namespace) -> int:
-    pdf_path = args.pdf.expanduser().resolve()
-    if not pdf_path.is_file():
-        print(f"PDF not found: {pdf_path}", file=sys.stderr)
-        return 1
-    pages = extract_pages(pdf_path)
+    target = BookTarget(
+        pdf=args.pdf.expanduser().resolve(),
+        stage=args.stage,
+        grade=args.grade,
+        subject=args.subject,
+        edition=args.edition,
+        term=args.term,
+    )
     try:
-        chunks = split_pages(pages)
+        inserted, stored = _ingest_one(target)
+    except FileNotFoundError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     except UnitSplitError as exc:
         print(str(exc), file=sys.stderr)
         return 1
+    print(f"Stored {inserted} chunks (rows for this book: {stored}).")
+    return 0
+
+
+def _ingest_primary_math(args: argparse.Namespace) -> int:
+    root = (args.root or default_primary_math_root()).expanduser().resolve()
+    pdfs = discover_primary_math_pdfs(root)
+    if not pdfs:
+        print(f"No PDFs under {root}", file=sys.stderr)
+        return 1
+    ok = 0
+    failed: list[tuple[str, str]] = []
+    for pdf in pdfs:
+        try:
+            target = parse_primary_math_meta(pdf)
+        except ValueError as exc:
+            failed.append((pdf.name, str(exc)))
+            print(f"SKIP {pdf.name}: {exc}", file=sys.stderr)
+            continue
+        print(
+            f"INGEST {target.grade}{target.term} ({pdf.name}) …",
+            flush=True,
+        )
+        try:
+            inserted, stored = _ingest_one(target)
+        except Exception as exc:  # noqa: BLE001 - batch continues after one book fails
+            failed.append((pdf.name, str(exc)))
+            print(f"FAIL {pdf.name}: {exc}", file=sys.stderr)
+            continue
+        ok += 1
+        print(f"OK {target.grade}{target.term}: {inserted} chunks ({stored} rows).")
+    print(f"Done. success={ok} failed={len(failed)} total={len(pdfs)}")
+    for name, reason in failed:
+        print(f"  failed: {name} — {reason}")
+    return 0 if ok else 1
+
+
+def _ingest_one(target: BookTarget) -> tuple[int, int]:
+    pdf_path = target.pdf.expanduser().resolve()
+    if not pdf_path.is_file():
+        raise FileNotFoundError(f"PDF not found: {pdf_path}")
+    pages = extract_pages(pdf_path)
+    chunks = split_pages(pages)
     meta = {
-        "stage": args.stage,
-        "grade": args.grade,
-        "subject": args.subject,
-        "edition": args.edition,
-        "term": args.term,
+        "stage": target.stage,
+        "grade": target.grade,
+        "subject": target.subject,
+        "edition": target.edition,
+        "term": target.term,
     }
     with connect() as conn:
         inserted = replace_book(
@@ -75,8 +142,7 @@ def _ingest(args: argparse.Namespace) -> int:
             **meta,
         )
         stored = count_book(conn, **meta)
-    print(f"Stored {inserted} chunks (rows for this book: {stored}).")
-    return 0
+    return inserted, stored
 
 
 def _query(args: argparse.Namespace) -> int:
