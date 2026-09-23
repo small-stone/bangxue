@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom'
+import Chat from './pages/Chat'
 import Config from './pages/Config'
 import Home from './pages/Home'
 import Placeholder from './pages/Placeholder'
@@ -10,6 +11,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
+      <Route path="/chat" element={<Chat />} />
+      <Route path="/chat/result" element={<Result />} />
       <Route path="/textbook" element={<Select />} />
       <Route path="/textbook/range" element={<Range />} />
       <Route path="/textbook/config" element={<Config />} />

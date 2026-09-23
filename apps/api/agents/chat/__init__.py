@@ -1,8 +1,26 @@
-"""Chat generation agent (DeepAgents) — placeholder."""
+"""Chat generation agent (DeepAgents)."""
+
+from agents.chat.harness import (
+    ChatError,
+    ChatTurnResult,
+    build_agent,
+    confirm_session,
+    create_session,
+    handle_parent_message,
+    list_agent_tool_names,
+    session_exists,
+)
 
 placeholder = "chat"
 
-
-def build_agent():
-    """Return the chat DeepAgents harness once implemented."""
-    return None
+__all__ = [
+    "ChatError",
+    "ChatTurnResult",
+    "build_agent",
+    "confirm_session",
+    "create_session",
+    "handle_parent_message",
+    "list_agent_tool_names",
+    "placeholder",
+    "session_exists",
+]

@@ -183,7 +183,7 @@ Agent 解析意图并出题 → 家长确认（可继续对话调整）
 ## 6. 教材内容来源
 
 - **来源方式**：由产品方提前准备好相关教材的 **PDF 文件**（按学段 / 年级 / 科目 / 版本整理），放在本地 `book/`，不提交到 git
-- **入库方式**：一次处理一本。入口在 `apps/api/ingest/`（离线命令，不是 HTTP 服务，也不写在出题图 `agents/textbook/` 里）。输入为 PDF 路径，以及学段、年级、科目、版本、学期。流程为：解析 PDF → 按单元切开 → 计算 embedding → 写入 PostgreSQL + pgvector。检索时先按这五项元数据过滤，再按单元或向量相似度取块，供 **方式 A** 出题引用
+- **入库方式**：一次处理一本。入口在 `apps/api/ingest/`（离线命令，不是 HTTP 服务，也不写在出题图 `agents/textbook/` 里）。输入为 PDF 路径，以及学段、年级、科目、版本、学期。流程为：解析 PDF → 按单元切开 → 用百炼 `qwen3.7-text-embedding` 计算 embedding → 写入 PostgreSQL + pgvector。检索时先按这五项元数据过滤，再按单元或向量相似度取块，供 **方式 A** 出题引用
 - **切分**：以教材单元（或目录中的同级结构）为界，每块记录单元名和页码。识别不到单元时入库失败，不写入无单元标记的整本
 - **元数据**：每份教材 PDF 需标注学段、年级、科目、版本、学期等；这些字段由命令参数传入，不从某一册文件名写死
 - **与方式 B 的关系**：对话出题一期可不依赖教材库；二期可支持「对话 + 指定教材范围」增强相关性
@@ -216,7 +216,7 @@ Agent 解析意图并出题 → 家长确认（可继续对话调整）
 | 方式 A Agent | **LangGraph**（StateGraph 固定流）                 | 按教材选题出题：节点与边确定性编排 + interrupt 确认   |
 | 方式 B Agent | **DeepAgents**（基于 LangGraph）                  | 对话出题：主 Agent + 子 Agent / 工具，多轮意图理解 |
 | 运行时        | LangGraph Checkpointer（上线落 Postgres）        | 两套实现共用会话持久化与 HITL 中断恢复；禁止生产用纯内存 |
-| 大模型        | OpenAI / Anthropic Claude（文本 + Vision）        | 出题、对话、解析；答卷视觉判分                    |
+| 大模型        | 阿里云百炼（通义）：出题 `qwen3.7-plus`；向量 `qwen3.7-text-embedding`；判分可用百炼多模态 | 出题、对话、解析；教材 embedding；答卷视觉判分 |
 | 教材 PDF 解析  | LlamaParse / Unstructured / pdfplumber        | 提取教材文本与结构，按单元切分                    |
 | 向量检索       | PostgreSQL + pgvector（或 Chroma）               | 教材 RAG（方式 A）                       |
 | 练习卷 PDF 生成 | WeasyPrint / ReportLab（或 Playwright HTML→PDF） | 生成可打印 A4 练习卷 / 答案卷（共用 Tool）        |
@@ -286,7 +286,7 @@ FastAPI（按入口路由）
      ┌───────┼────────┐
      ▼       ▼        ▼
  PostgreSQL 对象存储   外部 LLM API
- (+pgvector) (S3 兼容) (OpenAI / Claude 等)
+ (+pgvector) (S3 兼容) (阿里云百炼 / DashScope)
 ```
 
 | 组件 | 一期做法 | 说明 |
@@ -303,7 +303,7 @@ FastAPI（按入口路由）
 - **Checkpointer 持久化**：上线使用 Postgres（或等价）Checkpointer；禁止仅用内存实现，否则进程重启后 HITL 续跑失败
 - **长请求与流式**：出题 / 判分 / PDF 可能数十秒级；网关与 uvicorn 超时需放宽，对话与生成走 SSE / 流式接口
 - **PDF 镜像依赖**：WeasyPrint / Playwright 等需在 Docker 镜像中预装系统库，勿用「纯 Python 精简镜像」硬上
-- **密钥与限流**：LLM API Key、对象存储凭证仅通过环境变量注入；对模型调用做基础限流与错误重试
+- **密钥与限流**：百炼密钥 `bailian_api_key`、模型名（如 `QUIZ_MODEL` / `EMBEDDING_MODEL`）与对象存储凭证仅通过环境变量 / 仓库根目录 `.env` 注入（`.env` 不进 git）；对模型调用做基础限流与错误重试
 
 **环境区分**
 
@@ -327,6 +327,6 @@ FastAPI（按入口路由）
 2. 账号体系：游客可用，还是必须登录？是否支持多孩子？
 3. 主观题（作文、简答）判分深度：只给参考分，还是详细评语？
 4. 练习卷 PDF 是否必须支持数学公式、图形题等复杂排版？
-5. 大模型供应商与预算（OpenAI / Claude / 国内模型等）
+5. 大模型配额与预算（阿里云百炼：出题 / 向量 / 判分调用量）
 6. 对话出题是否一期就要强制选择年级/科目，还是完全自由描述？
 

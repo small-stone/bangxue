@@ -16,6 +16,7 @@ export type Draft = {
 export type Question = {
   qtype: string
   stem: string
+  options?: string[]
   answer?: string
 }
 
@@ -26,6 +27,8 @@ export type QuizPayload = {
   includeAnswers: boolean
   count: number
   difficulty: string
+  source?: 'textbook' | 'chat'
+  summary?: string
 }
 
 const DRAFT_KEY = 'bangxue-draft'

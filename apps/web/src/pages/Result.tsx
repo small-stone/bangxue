@@ -31,15 +31,25 @@ export default function Result() {
         <article className="paper-sheet">
           <div className="paper-scroll">
             <h2>{quiz.title}</h2>
-            <p className="sub">姓名 ________</p>
             {quiz.questions.map((question, index) => (
-              <p className="q" key={`${index}-${question.stem}`}>
-                {index + 1}. {question.stem}
-                {quiz.includeAnswers && question.answer ? <span className="answer"> 答案：{question.answer}</span> : null}
-              </p>
+              <div className="q" key={`${index}-${question.stem}`}>
+                <p>
+                  {index + 1}. {question.stem}
+                  {quiz.includeAnswers && question.answer ? (
+                    <span className="answer"> 答案：{question.answer}</span>
+                  ) : null}
+                </p>
+                {question.options && question.options.length > 0 ? (
+                  <ul className="q-options">
+                    {question.options.map((option) => (
+                      <li key={option}>{option}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             ))}
             <div className="chips" style={{ marginTop: 14 }}>
-              <span className="tag">教材</span>
+              <span className="tag">{quiz.source === 'chat' ? '对话' : '教材'}</span>
               <span className="tag">{quiz.count} 题</span>
               <span className="tag">{quiz.difficulty}</span>
               {quiz.includeAnswers ? <span className="tag">含答案卷</span> : null}
@@ -56,7 +66,7 @@ export default function Result() {
             下载答案卷
           </a>
         ) : null}
-        <button className="link-action" type="button" onClick={() => navigate('/textbook/config')}>
+        <button className="link-action" type="button" onClick={() => navigate(quiz.source === 'chat' ? '/chat' : '/textbook/config')}>
           再调整题目
         </button>
       </footer>

@@ -50,7 +50,7 @@ export default function Home() {
             type="button"
             onClick={() => {
               setSelected('chat')
-              setNotice('对话出题尚未开放')
+              navigate('/chat')
             }}
           >
             <div className="icon-well">

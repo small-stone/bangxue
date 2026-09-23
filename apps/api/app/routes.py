@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from agents.textbook.generate import TextbookError, generate_questions, list_units, load_unit_text
 from app.pdf_paper import render_pdf
+from app.question_format import format_question_body
 from app.quiz_store import get_quiz, save_quiz
 
 router = APIRouter()
@@ -97,11 +98,13 @@ def _pdf_response(quiz_id: str, *, answers: bool) -> Response:
     if answers and not quiz["include_answers"]:
         raise HTTPException(status_code=404, detail="这次没有生成答案卷。")
     if answers:
-        lines = [f"{item['stem']}  答案：{item.get('answer', '')}" for item in quiz["questions"]]
+        lines = [
+            format_question_body(item, include_answer=True) for item in quiz["questions"]
+        ]
         title = quiz["title"] + "（答案）"
         filename = "answers.pdf"
     else:
-        lines = [item["stem"] for item in quiz["questions"]]
+        lines = [format_question_body(item, include_answer=False) for item in quiz["questions"]]
         title = quiz["title"]
         filename = "paper.pdf"
     payload = render_pdf(title=title, lines=lines)

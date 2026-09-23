@@ -6,6 +6,7 @@ from collections.abc import Callable, Sequence
 
 import psycopg
 
+from app.question_format import normalize_options
 from ingest.store import connect
 
 PRIMARY_GRADES = {"一年级", "二年级", "三年级", "四年级", "五年级", "六年级"}
@@ -123,7 +124,15 @@ def generate_questions(
         stem = str(item.get("stem", "")).strip()
         if not stem:
             raise TextbookError("生成结果缺少题干。", 502)
-        row = {"qtype": str(item.get("qtype") or "计算题"), "stem": stem}
+        qtype = str(item.get("qtype") or "计算题").strip() or "计算题"
+        row: dict = {"qtype": qtype, "stem": stem}
+        options = normalize_options(item.get("options"))
+        if qtype == "选择题":
+            if not options or len(options) < 2:
+                raise TextbookError("选择题缺少选项，请重试。", 502)
+            row["options"] = options
+        elif options:
+            row["options"] = options
         if include_answers:
             row["answer"] = str(item.get("answer", "")).strip()
         cleaned.append(row)
@@ -175,7 +184,9 @@ def _bailian_generator(**kwargs) -> list[dict]:
                 "role": "system",
                 "content": (
                     f"你是{grade}小学数学出题助手。只根据给定课文出题，不要使用课文以外的知识点。"
-                    "返回 JSON：{\"questions\":[{\"qtype\":\"选择题|填空题|计算题\",\"stem\":\"...\"}]}。"
+                    "返回 JSON：{\"questions\":[{\"qtype\":\"选择题|填空题|计算题\",\"stem\":\"...\","
+                    "\"options\":[\"A. …\",\"B. …\",\"C. …\",\"D. …\"]}]}。"
+                    "选择题 MUST 提供 options（至少 4 个 A-D 选项）；填空题和计算题不要 options。"
                     f"题目数量必须正好是指定数量。{answer_rule}"
                     "只返回题目 JSON，不要输出思考过程。"
                 ),

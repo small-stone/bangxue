@@ -22,7 +22,7 @@ context: |
   - DB: PostgreSQL + pgvector (business + RAG); SQLAlchemy/SQLModel
   - Object storage: local disk in dev; S3-compatible in prod (textbooks, answer photos, generated PDFs)
   - PDF export: WeasyPrint / ReportLab / Playwright HTML→PDF (Docker image needs system libs)
-  - LLM: OpenAI / Anthropic Claude (text + vision grading)
+  - LLM: 阿里云百炼（Bailian / DashScope）：quiz `qwen3.7-plus`；embedding `qwen3.7-text-embedding`；key env `bailian_api_key`；vision grading via Bailian multimodal when needed
 
   Deploy (phase 1):
   - Docker Compose: Nginx (static Vite build) + FastAPI + PostgreSQL(+pgvector) + object storage
