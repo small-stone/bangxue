@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BottomNav } from '../chrome'
+import { BottomNav, GuestBadge } from '../chrome'
 import { BookIcon, MessageIcon, UserIcon } from '../icons'
 
 export default function Home() {
   const navigate = useNavigate()
-  const [notice, setNotice] = useState<string | null>(null)
   const [selected, setSelected] = useState<'textbook' | 'chat' | null>(null)
 
   return (
@@ -23,13 +22,15 @@ export default function Home() {
               <div className="hint">BANG XUE</div>
             </div>
           </div>
-          <div className="avatar" aria-hidden="true">
-            <UserIcon />
+          <div className="home-actions">
+            <GuestBadge />
+            <button className="avatar" type="button" aria-label="我的" onClick={() => navigate('/me')}>
+              <UserIcon />
+            </button>
           </div>
         </div>
         <h1 className="greet">你好，家长</h1>
         <p className="sub">为孩子智能出题与判分 · 教材 / 对话双入口</p>
-        {notice ? <p className="notice" style={{ marginTop: 16 }}>{notice}</p> : null}
         <div className="stack-gap">
           <button
             className={selected === 'textbook' ? 'card amber' : 'card'}
@@ -71,7 +72,7 @@ export default function Home() {
               <br />
               三年级数学第二单元
             </div>
-            <button className="btn btn-amber btn-sm" type="button" onClick={() => setNotice('拍照判分尚未开放')}>
+            <button className="btn btn-amber btn-sm" type="button" onClick={() => navigate('/grade/upload')}>
               去上传
             </button>
           </div>

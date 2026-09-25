@@ -1,15 +1,37 @@
 import { useNavigate } from 'react-router-dom'
 import { ChartIcon, ChevronLeft, HomeIcon, UserIcon } from './icons'
+import { isLoggedIn } from './session'
 
-export function PageNav({ title, badge }: { title: string; badge?: string }) {
+export function GuestBadge() {
+  if (isLoggedIn()) return null
+  return <span className="guest-badge">游客模式</span>
+}
+
+export function PageNav({
+  title,
+  badge,
+  hideGuest = false,
+}: {
+  title: string
+  badge?: string
+  hideGuest?: boolean
+}) {
   const navigate = useNavigate()
+  const showGuest = !hideGuest && !badge && !isLoggedIn()
+
   return (
     <div className="nav">
       <button className="back" type="button" aria-label="返回" onClick={() => navigate(-1)}>
         <ChevronLeft />
       </button>
       <h1>{title}</h1>
-      {badge ? <span className="badge">{badge}</span> : <span style={{ width: 32 }} />}
+      {badge ? (
+        <span className="badge">{badge}</span>
+      ) : showGuest ? (
+        <GuestBadge />
+      ) : (
+        <span style={{ width: 32 }} />
+      )}
     </div>
   )
 }

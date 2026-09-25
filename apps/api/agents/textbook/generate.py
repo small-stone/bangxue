@@ -6,7 +6,6 @@ from collections.abc import Callable, Sequence
 
 import psycopg
 
-from app.question_format import normalize_options
 from ingest.store import connect
 
 PRIMARY_GRADES = {"一年级", "二年级", "三年级", "四年级", "五年级", "六年级"}
@@ -102,41 +101,22 @@ def generate_questions(
     grade: str = "一年级",
     generator: Generator | None = None,
 ) -> list[dict]:
-    if count not in {10, 15, 20, 30}:
-        raise TextbookError("题量只能是 10、15、20 或 30。")
-    build = generator or _bailian_generator
-    try:
-        questions = build(
-            source_text=source_text,
-            count=count,
-            difficulty=difficulty,
-            include_answers=include_answers,
-            grade=grade,
-        )
-    except TextbookError:
-        raise
-    except Exception as exc:  # noqa: BLE001 - surface provider failures as config errors
-        raise TextbookError(f"暂时无法出题：{exc}", 503) from exc
-    if len(questions) != count:
-        raise TextbookError("题目数量与设置不一致，请重试。", 502)
-    cleaned: list[dict] = []
-    for item in questions:
-        stem = str(item.get("stem", "")).strip()
-        if not stem:
-            raise TextbookError("生成结果缺少题干。", 502)
-        qtype = str(item.get("qtype") or "计算题").strip() or "计算题"
-        row: dict = {"qtype": qtype, "stem": stem}
-        options = normalize_options(item.get("options"))
-        if qtype == "选择题":
-            if not options or len(options) < 2:
-                raise TextbookError("选择题缺少选项，请重试。", 502)
-            row["options"] = options
-        elif options:
-            row["options"] = options
-        if include_answers:
-            row["answer"] = str(item.get("answer", "")).strip()
-        cleaned.append(row)
-    return cleaned
+    """Facade: run the textbook LangGraph with preloaded source text."""
+    from agents.textbook.graph import run_textbook_quiz
+
+    return run_textbook_quiz(
+        units=[],
+        count=count,
+        difficulty=difficulty,
+        include_answers=include_answers,
+        generator=generator,
+        source_text=source_text,
+        stage="小学",
+        grade=grade,
+        subject="数学",
+        edition="人教版",
+        term="上册",
+    )
 
 
 def _require_primary_math(**meta: str) -> None:

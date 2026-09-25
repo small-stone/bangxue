@@ -23,6 +23,9 @@ const path = require('path');
     pdf: 'mockup-04-pdf.png',
     upload: 'mockup-05-upload.png',
     result: 'mockup-06-result.png',
+    scores: 'mockup-07-scores.png',
+    me: 'mockup-08-me.png',
+    login: 'mockup-09-login.png',
   };
 
   for (const [id, file] of Object.entries(map)) {

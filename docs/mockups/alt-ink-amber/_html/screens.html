@@ -417,6 +417,52 @@
   .result-card { padding: 16px; margin-top: 4px; }
   .result-card .btn { margin-top: 14px; }
   .rule { height: 1px; background: var(--line); margin: 10px 0; }
+  .page-title {
+    font-family: "Songti SC", "Noto Serif SC", "STSong", serif;
+    font-size: 24px; font-weight: 700; letter-spacing: .5px;
+  }
+  .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0 12px; }
+  .stat-card {
+    background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .stat-card.accent { background: var(--amber-soft); border-color: rgba(196,122,26,.25); }
+  .stat-label { font-size: 12px; color: var(--ink-55); font-weight: 600; }
+  .stat-value { margin-top: 6px; font-size: 28px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .stat-card.accent .stat-value { color: var(--amber); }
+  .stat-unit { font-size: 14px; margin-left: 2px; }
+  .practice-title { font-size: 13px; color: var(--ink-80); margin: 0 0 8px; font-weight: 600; }
+  .profile-card {
+    display: flex; align-items: center; gap: 12px; margin: 14px 0 16px;
+    padding: 16px; background: var(--paper); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: 0 4px 16px var(--shadow);
+  }
+  .avatar.lg { width: 52px; height: 52px; }
+  .profile-name { font-size: 17px; font-weight: 700; }
+  .profile-sub { margin-top: 4px; font-size: 12px; color: var(--ink-55); }
+  .menu-card {
+    background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
+    overflow: hidden; margin-bottom: 12px;
+  }
+  .menu-row {
+    display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+    border-bottom: 1px solid var(--line); font-size: 15px; font-weight: 600;
+  }
+  .menu-row:last-child { border-bottom: none; }
+  .menu-ico {
+    width: 32px; height: 32px; border-radius: 10px; background: var(--amber-soft);
+    color: var(--amber); display: grid; place-items: center; flex-shrink: 0;
+  }
+  .menu-row .chev { margin-left: auto; color: var(--ink-55); }
+  .field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .field-label { font-size: 12px; font-weight: 700; color: var(--ink-80); }
+  .field input, .field-fake {
+    width: 100%; border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; background: var(--paper); color: var(--ink); font-size: 15px;
+  }
+  .field-row { display: flex; gap: 8px; }
+  .field-row .field-fake { flex: 1; }
+  .login-stack { margin-top: 20px; display: grid; gap: 10px; }
 </style>
 </head>
 <body>
@@ -800,6 +846,153 @@
       <div class="tab"><svg><use href="#i-home"/></svg>首页</div>
       <div class="tab active"><svg><use href="#i-chart"/></svg>成绩</div>
       <div class="tab"><svg><use href="#i-user"/></svg>我的</div>
+    </div>
+  </div>
+</section>
+
+<!-- 07 SCORES -->
+<section class="phone" id="scores">
+  <div class="paper-texture"></div>
+  <div class="status"><span>9:41</span><span>▮▮▮ Wi‑Fi</span></div>
+  <div class="content with-tabs">
+    <h2 class="page-title">成绩记录</h2>
+    <div class="sub" style="margin-top:6px">查看历史练习得分与错题</div>
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">练习次数</div>
+        <div class="stat-value">4</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">平均得分</div>
+        <div class="stat-value">90<span class="stat-unit">%</span></div>
+      </div>
+    </div>
+    <div class="chips">
+      <div class="chip on">全部</div>
+      <div class="chip">数学</div>
+      <div class="chip">语文</div>
+      <div class="chip">英语</div>
+    </div>
+    <div class="section-label" style="margin-top:16px"><svg class="ico-sm"><use href="#i-chart"/></svg>最近练习</div>
+    <div class="practice">
+      <div class="top">
+        <span class="subj-dot">数</span><span>10-24</span><b>数学</b>
+        <span class="tag"><svg class="ico-sm" style="width:12px;height:12px"><use href="#i-book"/></svg>教材</span>
+        <span class="score">18/20 · 90%</span>
+      </div>
+      <div class="practice-title">三年级 · 第二单元</div>
+      <div class="bar"><i style="width:90%"></i></div>
+    </div>
+    <div class="practice">
+      <div class="top">
+        <span class="subj-dot">英</span><span>10-23</span><b>英语</b>
+        <span class="tag"><svg class="ico-sm" style="width:12px;height:12px"><use href="#i-message"/></svg>对话</span>
+        <span class="score">16/20 · 80%</span>
+      </div>
+      <div class="practice-title">Unit 2 单词练习</div>
+      <div class="bar"><i style="width:80%"></i></div>
+    </div>
+    <div class="practice">
+      <div class="top">
+        <span class="subj-dot">数</span><span>10-21</span><b>数学</b>
+        <span class="tag"><svg class="ico-sm" style="width:12px;height:12px"><use href="#i-message"/></svg>对话</span>
+        <span class="score">9/10 · 90%</span>
+      </div>
+      <div class="practice-title">20 以内加减法</div>
+      <div class="bar"><i style="width:90%"></i></div>
+    </div>
+  </div>
+  <div class="tab-dock">
+    <div class="tabs">
+      <div class="tab"><svg><use href="#i-home"/></svg>首页</div>
+      <div class="tab active"><svg><use href="#i-chart"/></svg>成绩</div>
+      <div class="tab"><svg><use href="#i-user"/></svg>我的</div>
+    </div>
+  </div>
+</section>
+
+<!-- 08 ME -->
+<section class="phone" id="me">
+  <div class="paper-texture"></div>
+  <div class="status"><span>9:41</span><span>▮▮▮ Wi‑Fi</span></div>
+  <div class="content with-tabs">
+    <h2 class="page-title">我的</h2>
+    <div class="sub" style="margin-top:6px">账号、孩子与学习设置</div>
+    <div class="profile-card">
+      <div class="avatar lg"><svg><use href="#i-user"/></svg></div>
+      <div>
+        <div class="profile-name">点击登录</div>
+        <div class="profile-sub">登录后同步成绩与错题本</div>
+      </div>
+      <svg class="ico-sm chev" style="margin-left:auto;color:var(--ink-55)"><use href="#i-chevron-right"/></svg>
+    </div>
+    <div class="menu-card">
+      <div class="menu-row">
+        <span class="menu-ico"><svg class="ico-sm"><use href="#i-book"/></svg></span>
+        错题本
+        <svg class="ico-sm chev"><use href="#i-chevron-right"/></svg>
+      </div>
+      <div class="menu-row">
+        <span class="menu-ico"><svg class="ico-sm"><use href="#i-user"/></svg></span>
+        孩子档案
+        <svg class="ico-sm chev"><use href="#i-chevron-right"/></svg>
+      </div>
+      <div class="menu-row">
+        <span class="menu-ico"><svg class="ico-sm"><use href="#i-chart"/></svg></span>
+        成绩记录
+        <svg class="ico-sm chev"><use href="#i-chevron-right"/></svg>
+      </div>
+    </div>
+    <div class="menu-card">
+      <div class="menu-row">设置<svg class="ico-sm chev"><use href="#i-chevron-right"/></svg></div>
+      <div class="menu-row">关于帮学<svg class="ico-sm chev"><use href="#i-chevron-right"/></svg></div>
+    </div>
+    <button class="btn btn-amber btn-block" style="margin-top:8px">登录 / 注册</button>
+  </div>
+  <div class="tab-dock">
+    <div class="tabs">
+      <div class="tab"><svg><use href="#i-home"/></svg>首页</div>
+      <div class="tab"><svg><use href="#i-chart"/></svg>成绩</div>
+      <div class="tab active"><svg><use href="#i-user"/></svg>我的</div>
+    </div>
+  </div>
+</section>
+
+<!-- 09 LOGIN -->
+<section class="phone" id="login">
+  <div class="paper-texture"></div>
+  <div class="status"><span>9:41</span><span>▮▮▮ Wi‑Fi</span></div>
+  <div class="content">
+    <div class="nav">
+      <div class="back"><svg class="ico"><use href="#i-chevron-left"/></svg></div>
+      <h2 class="page">登录</h2>
+      <span style="width:32px"></span>
+    </div>
+    <div class="brand-lockup" style="margin-top:8px">
+      <div class="brand-mark"><svg><use href="#i-logo-bang"/></svg></div>
+      <div class="brand-word">
+        <div class="name"><em>帮</em>学</div>
+        <div class="hint">BANG XUE</div>
+      </div>
+    </div>
+    <div class="greet" style="font-size:24px;margin-top:20px">欢迎回来</div>
+    <div class="sub">登录后可同步成绩与错题；也可先游客使用</div>
+    <div style="margin-top:28px">
+      <div class="field">
+        <div class="field-label">邮箱</div>
+        <div class="field-fake">请输入邮箱</div>
+      </div>
+      <div class="field">
+        <div class="field-label">验证码</div>
+        <div class="field-row">
+          <div class="field-fake">请输入邮箱验证码</div>
+          <button class="btn btn-outline btn-sm" style="white-space:nowrap">发送验证码</button>
+        </div>
+      </div>
+      <div class="login-stack">
+        <button class="btn btn-amber btn-block">登录</button>
+        <button class="btn btn-outline btn-block">游客继续使用</button>
+      </div>
     </div>
   </div>
 </section>

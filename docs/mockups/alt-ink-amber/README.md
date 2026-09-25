@@ -39,5 +39,8 @@
 | `mockup-04-pdf.png` | PDF 已生成 |
 | `mockup-05-upload.png` | 拍照上传 |
 | `mockup-06-result.png` | 判分结果 |
+| `mockup-07-scores.png` | 成绩记录 |
+| `mockup-08-me.png` | 我的 |
+| `mockup-09-login.png` | 登录 |
 
 源文件：`_html/screens.html`，重导出：`node _html/capture.cjs`

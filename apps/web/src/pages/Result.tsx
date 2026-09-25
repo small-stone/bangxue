@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { PageNav } from '../chrome'
 import { loadQuiz, loadQuizError } from '../draft'
+import { CameraIcon } from '../icons'
 
 export default function Result() {
   const navigate = useNavigate()
@@ -61,11 +62,10 @@ export default function Result() {
         <a className="btn btn-amber btn-block" href={`/api/quizzes/${quiz.id}/paper.pdf`}>
           下载 PDF
         </a>
-        {quiz.includeAnswers ? (
-          <a className="btn btn-outline amber btn-block" href={`/api/quizzes/${quiz.id}/answers.pdf`}>
-            下载答案卷
-          </a>
-        ) : null}
+        <button className="btn btn-outline amber btn-block" type="button" onClick={() => navigate('/grade/upload')}>
+          <CameraIcon size={18} />
+          去拍照判分
+        </button>
         <button className="link-action" type="button" onClick={() => navigate(quiz.source === 'chat' ? '/chat' : '/textbook/config')}>
           再调整题目
         </button>

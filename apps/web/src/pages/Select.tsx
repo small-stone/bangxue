@@ -34,7 +34,7 @@ export default function Select() {
   return (
     <div className="app-shell">
       <div className="page">
-        <PageNav title="按教材出题" badge="方式 A" />
+        <PageNav title="按教材出题" />
         <div className="banner">紧扣课本单元出题</div>
         {!ready ? <p className="notice">目前只开放小学数学人教版一年级至六年级的上册或下册</p> : null}
         <div className="seg">

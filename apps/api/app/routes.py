@@ -4,7 +4,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from agents.textbook.generate import TextbookError, generate_questions, list_units, load_unit_text
+from agents.textbook.generate import TextbookError, list_units
+from agents.textbook.graph import run_textbook_quiz
 from app.pdf_paper import render_pdf
 from app.question_format import format_question_body
 from app.quiz_store import get_quiz, save_quiz
@@ -53,13 +54,12 @@ def create_quiz(body: QuizRequest) -> dict:
     difficulty = meta.pop("difficulty")
     include_answers = meta.pop("include_answers")
     try:
-        source = load_unit_text(units, **meta)
-        questions = generate_questions(
-            source_text=source,
+        questions = run_textbook_quiz(
+            units=units,
             count=count,
             difficulty=difficulty,
             include_answers=include_answers,
-            grade=body.grade,
+            **meta,
         )
     except TextbookError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc

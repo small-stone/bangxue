@@ -39,3 +39,6 @@ coverage/
 
 # Local textbook PDFs
 book/
+
+# Local grading uploads and score JSON (dev persistence)
+apps/api/data/
