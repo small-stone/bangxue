@@ -14,6 +14,9 @@ from agents.textbook.generate import (
 )
 from app.question_format import normalize_options
 
+# Retry model/validation failures inside the generate node (not client 4xx).
+MAX_GENERATE_ATTEMPTS = 3
+
 
 class TextbookQuizState(TypedDict):
     meta: dict[str, str]
@@ -44,6 +47,36 @@ def _load_source_text(state: TextbookQuizState) -> dict[str, Any]:
     return {"source_text": text}
 
 
+def _clean_generated_questions(
+    questions: list,
+    *,
+    count: int,
+    include_answers: bool,
+) -> tuple[list[dict] | None, str | None, int | None]:
+    """Validate/normalize model output. On failure return (None, message, status)."""
+    if len(questions) != count:
+        return None, "题目数量与设置不一致，请重试。", 502
+
+    cleaned: list[dict] = []
+    for item in questions:
+        stem = str(item.get("stem", "")).strip()
+        if not stem:
+            return None, "生成结果缺少题干。", 502
+        qtype = str(item.get("qtype") or "计算题").strip() or "计算题"
+        row: dict = {"qtype": qtype, "stem": stem}
+        options = normalize_options(item.get("options"))
+        if qtype == "选择题":
+            if not options or len(options) < 2:
+                return None, "选择题缺少选项，请重试。", 502
+            row["options"] = options
+        elif options:
+            row["options"] = options
+        if include_answers:
+            row["answer"] = str(item.get("answer", "")).strip()
+        cleaned.append(row)
+    return cleaned, None, None
+
+
 def _generate_questions(state: TextbookQuizState) -> dict[str, Any]:
     if state.get("error"):
         return {}
@@ -56,40 +89,38 @@ def _generate_questions(state: TextbookQuizState) -> dict[str, Any]:
 
     build = state.get("generator") or _bailian_generator
     include_answers = bool(state["include_answers"])
-    try:
-        questions = build(
-            source_text=source_text,
-            count=count,
-            difficulty=state["difficulty"],
-            include_answers=include_answers,
-            grade=state.get("grade") or "一年级",
+    grade = state.get("grade") or "一年级"
+    last_error = "暂时无法出题，请重试。"
+    last_status = 502
+
+    for _ in range(MAX_GENERATE_ATTEMPTS):
+        try:
+            questions = build(
+                source_text=source_text,
+                count=count,
+                difficulty=state["difficulty"],
+                include_answers=include_answers,
+                grade=grade,
+            )
+        except TextbookError as exc:
+            # Client / config errors are not worth retrying.
+            if exc.status_code < 500:
+                return {"error": str(exc), "error_status": exc.status_code}
+            last_error, last_status = str(exc), exc.status_code
+            continue
+        except Exception as exc:  # noqa: BLE001
+            last_error, last_status = f"暂时无法出题：{exc}", 503
+            continue
+
+        cleaned, err, status = _clean_generated_questions(
+            questions, count=count, include_answers=include_answers
         )
-    except TextbookError as exc:
-        return {"error": str(exc), "error_status": exc.status_code}
-    except Exception as exc:  # noqa: BLE001
-        return {"error": f"暂时无法出题：{exc}", "error_status": 503}
+        if cleaned is not None:
+            return {"questions": cleaned}
+        last_error = err or last_error
+        last_status = status or last_status
 
-    if len(questions) != count:
-        return {"error": "题目数量与设置不一致，请重试。", "error_status": 502}
-
-    cleaned: list[dict] = []
-    for item in questions:
-        stem = str(item.get("stem", "")).strip()
-        if not stem:
-            return {"error": "生成结果缺少题干。", "error_status": 502}
-        qtype = str(item.get("qtype") or "计算题").strip() or "计算题"
-        row: dict = {"qtype": qtype, "stem": stem}
-        options = normalize_options(item.get("options"))
-        if qtype == "选择题":
-            if not options or len(options) < 2:
-                return {"error": "选择题缺少选项，请重试。", "error_status": 502}
-            row["options"] = options
-        elif options:
-            row["options"] = options
-        if include_answers:
-            row["answer"] = str(item.get("answer", "")).strip()
-        cleaned.append(row)
-    return {"questions": cleaned}
+    return {"error": last_error, "error_status": last_status}
 
 
 @lru_cache(maxsize=1)

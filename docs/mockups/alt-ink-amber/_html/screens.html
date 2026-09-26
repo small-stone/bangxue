@@ -463,6 +463,105 @@
   .field-row { display: flex; gap: 8px; }
   .field-row .field-fake { flex: 1; }
   .login-stack { margin-top: 20px; display: grid; gap: 10px; }
+
+  /* Scores + wrong-book refinements (align with Me) */
+  .head-row {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  }
+  .guest-pill {
+    flex-shrink: 0; margin-top: 4px;
+    font-size: 11px; font-weight: 700; color: var(--amber);
+    background: var(--amber-soft); border: 1px solid rgba(196,122,26,.28);
+    padding: 5px 10px; border-radius: 8px;
+  }
+  .spark-card {
+    background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px 16px; margin-bottom: 12px;
+    box-shadow: 0 4px 16px var(--shadow);
+  }
+  .spark-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .spark-head .label { font-size: 12px; font-weight: 700; color: var(--ink-80); display: flex; align-items: center; gap: 6px; }
+  .spark-head .label svg { color: var(--amber); }
+  .spark-head .hint { font-size: 11px; color: var(--ink-55); font-weight: 600; }
+  .sparkline {
+    display: flex; align-items: flex-end; gap: 8px; height: 44px;
+  }
+  .sparkline span {
+    flex: 1; border-radius: 6px 6px 2px 2px;
+    background: var(--amber-soft); position: relative;
+  }
+  .sparkline span i {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    border-radius: 6px 6px 2px 2px; background: var(--amber);
+  }
+  .spark-days {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px;
+    margin-top: 8px; font-size: 10px; color: var(--ink-55); text-align: center; font-weight: 600;
+  }
+  .score-card {
+    background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px 16px; margin-bottom: 10px;
+    box-shadow: 0 4px 16px var(--shadow);
+  }
+  .score-card .top { display: flex; align-items: center; gap: 10px; }
+  .score-card .top .meta { flex: 1; min-width: 0; }
+  .score-card .title-row {
+    display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700;
+  }
+  .score-card .title-row .date { color: var(--ink-55); font-weight: 600; font-size: 12px; }
+  .score-card .desc { margin-top: 4px; font-size: 12px; color: var(--ink-55); }
+  .score-card .foot {
+    display: flex; align-items: center; gap: 8px; margin-top: 12px;
+  }
+  .score-card .foot .bar { flex: 1; }
+  .score-card .chev { color: var(--ink-55); flex-shrink: 0; }
+  .wrong-count {
+    font-size: 11px; font-weight: 700; color: var(--wrong);
+    background: rgba(196,75,60,.1); padding: 3px 8px; border-radius: 6px;
+  }
+  .stat-card {
+    box-shadow: 0 4px 16px var(--shadow);
+  }
+  .wrong-card {
+    background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px 16px; margin-bottom: 10px;
+    box-shadow: 0 4px 16px var(--shadow);
+  }
+  .wrong-card .top {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+  }
+  .wrong-card .top .meta { flex: 1; min-width: 0; }
+  .wrong-card .kicker {
+    display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700;
+  }
+  .wrong-card .kicker .date { margin-left: auto; font-size: 12px; color: var(--ink-55); font-weight: 600; }
+  .wrong-stem {
+    font-size: 15px; font-weight: 600; line-height: 1.45; color: var(--ink);
+  }
+  .wrong-meta {
+    margin-top: 8px; font-size: 12px; color: var(--ink-55); font-weight: 600;
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  }
+  .wrong-answers {
+    margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line);
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+  .ans-box {
+    border-radius: 10px; padding: 10px 12px; background: rgba(22,22,22,.04);
+  }
+  .ans-box .lab { font-size: 11px; font-weight: 700; color: var(--ink-55); }
+  .ans-box .val { margin-top: 4px; font-size: 14px; font-weight: 700; }
+  .ans-box.bad { background: rgba(196,75,60,.1); }
+  .ans-box.bad .lab, .ans-box.bad .val { color: var(--wrong); }
+  .ans-box.ok { background: var(--amber-soft); }
+  .ans-box.ok .lab, .ans-box.ok .val { color: var(--amber); }
+  .sticky-cta {
+    position: absolute; left: 20px; right: 20px; bottom: 28px; z-index: 5;
+  }
+  .content.with-back-cta { padding-bottom: 96px; }
 </style>
 </head>
 <body>
@@ -855,8 +954,13 @@
   <div class="paper-texture"></div>
   <div class="status"><span>9:41</span><span>▮▮▮ Wi‑Fi</span></div>
   <div class="content with-tabs">
-    <h2 class="page-title">成绩记录</h2>
-    <div class="sub" style="margin-top:6px">查看历史练习得分与错题</div>
+    <div class="head-row">
+      <div>
+        <h2 class="page-title">成绩记录</h2>
+        <div class="sub" style="margin-top:6px">查看历史练习得分与错题</div>
+      </div>
+      <span class="guest-pill">已登录</span>
+    </div>
     <div class="stats-row">
       <div class="stat-card">
         <div class="stat-label">练习次数</div>
@@ -867,39 +971,58 @@
         <div class="stat-value">90<span class="stat-unit">%</span></div>
       </div>
     </div>
+    <div class="spark-card">
+      <div class="spark-head">
+        <div class="label"><svg class="ico-sm"><use href="#i-chart"/></svg>近 7 日得分</div>
+        <div class="hint">最高 95%</div>
+      </div>
+      <div class="sparkline">
+        <span style="height:42%"><i style="height:100%"></i></span>
+        <span style="height:58%"><i style="height:100%"></i></span>
+        <span style="height:36%"><i style="height:100%"></i></span>
+        <span style="height:78%"><i style="height:100%"></i></span>
+        <span style="height:64%"><i style="height:100%"></i></span>
+        <span style="height:88%"><i style="height:100%"></i></span>
+        <span style="height:72%"><i style="height:100%"></i></span>
+      </div>
+      <div class="spark-days"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+    </div>
     <div class="chips">
       <div class="chip on">全部</div>
       <div class="chip">数学</div>
       <div class="chip">语文</div>
       <div class="chip">英语</div>
     </div>
-    <div class="section-label" style="margin-top:16px"><svg class="ico-sm"><use href="#i-chart"/></svg>最近练习</div>
-    <div class="practice">
+    <div class="section-label" style="margin-top:16px"><svg class="ico-sm"><use href="#i-clipboard"/></svg>最近练习</div>
+    <div class="score-card">
       <div class="top">
-        <span class="subj-dot">数</span><span>10-24</span><b>数学</b>
-        <span class="tag"><svg class="ico-sm" style="width:12px;height:12px"><use href="#i-book"/></svg>教材</span>
-        <span class="score">18/20 · 90%</span>
+        <span class="menu-ico"><svg class="ico-sm"><use href="#i-calc"/></svg></span>
+        <div class="meta">
+          <div class="title-row"><span class="date">10-24</span>数学 <span class="tag"><svg class="ico-sm" style="width:12px;height:12px"><use href="#i-book"/></svg>教材</span></div>
+          <div class="desc">三年级 · 第二单元</div>
+        </div>
+        <span class="score">90%</span>
+        <svg class="ico-sm chev"><use href="#i-chevron-right"/></svg>
       </div>
-      <div class="practice-title">三年级 · 第二单元</div>
-      <div class="bar"><i style="width:90%"></i></div>
+      <div class="foot">
+        <div class="bar"><i style="width:90%"></i></div>
+        <span class="wrong-count">错 2</span>
+      </div>
     </div>
-    <div class="practice">
+    <div class="score-card">
       <div class="top">
-        <span class="subj-dot">英</span><span>10-23</span><b>英语</b>
-        <span class="tag"><svg class="ico-sm" style="width:12px;height:12px"><use href="#i-message"/></svg>对话</span>
-        <span class="score">16/20 · 80%</span>
+        <span class="menu-ico"><svg class="ico-sm"><use href="#i-globe"/></svg></span>
+        <div class="meta">
+          <div class="title-row"><span class="date">10-23</span>英语 <span class="tag"><svg class="ico-sm" style="width:12px;height:12px"><use href="#i-message"/></svg>对话</span></div>
+          <div class="desc">Unit 2 单词练习</div>
+        </div>
+        <span class="score">80%</span>
+        <svg class="ico-sm chev"><use href="#i-chevron-right"/></svg>
       </div>
-      <div class="practice-title">Unit 2 单词练习</div>
-      <div class="bar"><i style="width:80%"></i></div>
-    </div>
-    <div class="practice">
-      <div class="top">
-        <span class="subj-dot">数</span><span>10-21</span><b>数学</b>
-        <span class="tag"><svg class="ico-sm" style="width:12px;height:12px"><use href="#i-message"/></svg>对话</span>
-        <span class="score">9/10 · 90%</span>
+      <div class="foot">
+        <div class="bar"><i style="width:80%"></i></div>
+        <span class="wrong-count">错 4</span>
       </div>
-      <div class="practice-title">20 以内加减法</div>
-      <div class="bar"><i style="width:90%"></i></div>
     </div>
   </div>
   <div class="tab-dock">
@@ -908,6 +1031,94 @@
       <div class="tab active"><svg><use href="#i-chart"/></svg>成绩</div>
       <div class="tab"><svg><use href="#i-user"/></svg>我的</div>
     </div>
+  </div>
+</section>
+
+<!-- 07b WRONG BOOK -->
+<section class="phone" id="wrongbook">
+  <div class="paper-texture"></div>
+  <div class="status"><span>9:41</span><span>▮▮▮ Wi‑Fi</span></div>
+  <div class="content with-back-cta">
+    <div class="nav">
+      <div class="back"><svg class="ico"><use href="#i-chevron-left"/></svg></div>
+      <h2 class="page">错题本</h2>
+      <span style="width:32px"></span>
+    </div>
+    <div class="sub" style="margin-top:-4px;margin-bottom:14px">来自已确认成绩的错题</div>
+    <div class="stats-row" style="margin-top:0">
+      <div class="stat-card">
+        <div class="stat-label">待复习</div>
+        <div class="stat-value">6</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-label">本周新增</div>
+        <div class="stat-value">2</div>
+      </div>
+    </div>
+    <div class="chips">
+      <div class="chip on">全部</div>
+      <div class="chip">数学</div>
+      <div class="chip">语文</div>
+      <div class="chip">英语</div>
+    </div>
+    <div class="section-label" style="margin-top:16px"><svg class="ico-sm"><use href="#i-book"/></svg>错题列表</div>
+    <div class="wrong-card">
+      <div class="top">
+        <span class="menu-ico"><svg class="ico-sm"><use href="#i-clock"/></svg></span>
+        <div class="meta">
+          <div class="kicker">数学 · 第 3 题 <span class="date">10-24</span></div>
+        </div>
+        <svg class="ico-sm chev" style="color:var(--ink-55)"><use href="#i-chevron-right"/></svg>
+      </div>
+      <div class="wrong-stem">时针指向 2，分针指向 12，现在是几点？</div>
+      <div class="wrong-meta">
+        <span class="tag"><svg class="ico-sm" style="width:12px;height:12px"><use href="#i-book"/></svg>教材</span>
+        三年级 · 第二单元
+      </div>
+      <div class="wrong-answers">
+        <div class="ans-box bad"><div class="lab">你的答案</div><div class="val">3:00</div></div>
+        <div class="ans-box ok"><div class="lab">正确答案</div><div class="val">2:00</div></div>
+      </div>
+    </div>
+    <div class="wrong-card">
+      <div class="top">
+        <span class="menu-ico"><svg class="ico-sm"><use href="#i-calc"/></svg></span>
+        <div class="meta">
+          <div class="kicker">数学 · 第 7 题 <span class="date">10-24</span></div>
+        </div>
+        <svg class="ico-sm chev" style="color:var(--ink-55)"><use href="#i-chevron-right"/></svg>
+      </div>
+      <div class="wrong-stem">计算：38 + 27 = ?</div>
+      <div class="wrong-meta">
+        <span class="tag"><svg class="ico-sm" style="width:12px;height:12px"><use href="#i-book"/></svg>教材</span>
+        三年级 · 第二单元
+      </div>
+      <div class="wrong-answers">
+        <div class="ans-box bad"><div class="lab">你的答案</div><div class="val">55</div></div>
+        <div class="ans-box ok"><div class="lab">正确答案</div><div class="val">65</div></div>
+      </div>
+    </div>
+    <div class="wrong-card">
+      <div class="top">
+        <span class="menu-ico"><svg class="ico-sm"><use href="#i-edit"/></svg></span>
+        <div class="meta">
+          <div class="kicker">英语 · 第 2 题 <span class="date">10-23</span></div>
+        </div>
+        <svg class="ico-sm chev" style="color:var(--ink-55)"><use href="#i-chevron-right"/></svg>
+      </div>
+      <div class="wrong-stem">选出 “苹果” 的正确拼写</div>
+      <div class="wrong-meta">
+        <span class="tag"><svg class="ico-sm" style="width:12px;height:12px"><use href="#i-message"/></svg>对话</span>
+        Unit 2 单词练习
+      </div>
+      <div class="wrong-answers">
+        <div class="ans-box bad"><div class="lab">你的答案</div><div class="val">appel</div></div>
+        <div class="ans-box ok"><div class="lab">正确答案</div><div class="val">apple</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="sticky-cta">
+    <button class="btn btn-amber btn-block"><svg class="ico-sm"><use href="#i-spark"/></svg>用错题出一卷</button>
   </div>
 </section>
 

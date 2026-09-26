@@ -7,6 +7,10 @@ export function GuestBadge() {
   return <span className="guest-badge">游客模式</span>
 }
 
+export function DemoBadge() {
+  return <span className="guest-badge">演示</span>
+}
+
 export function PageNav({
   title,
   badge,

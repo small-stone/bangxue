@@ -24,6 +24,7 @@ const path = require('path');
     upload: 'mockup-05-upload.png',
     result: 'mockup-06-result.png',
     scores: 'mockup-07-scores.png',
+    wrongbook: 'mockup-07b-wrongbook.png',
     me: 'mockup-08-me.png',
     login: 'mockup-09-login.png',
   };

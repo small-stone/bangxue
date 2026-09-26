@@ -40,6 +40,7 @@
 | `mockup-05-upload.png` | 拍照上传 |
 | `mockup-06-result.png` | 判分结果 |
 | `mockup-07-scores.png` | 成绩记录 |
+| `mockup-07b-wrongbook.png` | 错题本 |
 | `mockup-08-me.png` | 我的 |
 | `mockup-09-login.png` | 登录 |
 

@@ -1505,4 +1505,265 @@ button.avatar {
   color: var(--ink-55);
 }
 
+.demo-hint {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.spark-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-top: 12px;
+  box-shadow: 0 4px 16px var(--shadow);
+}
+
+.spark-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.spark-head .label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-80);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.spark-head .label svg {
+  color: var(--amber);
+  width: 14px;
+  height: 14px;
+}
+
+.spark-head .hint {
+  font-size: 11px;
+  color: var(--ink-55);
+  font-weight: 600;
+}
+
+.sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 44px;
+}
+
+.sparkline span {
+  flex: 1;
+  border-radius: 6px 6px 2px 2px;
+  background: var(--amber-soft);
+  position: relative;
+  min-height: 8px;
+}
+
+.sparkline span i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 6px 6px 2px 2px;
+  background: var(--amber);
+  display: block;
+}
+
+.spark-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--ink-55);
+  text-align: center;
+  font-weight: 600;
+}
+
+.score-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  box-shadow: 0 4px 16px var(--shadow);
+}
+
+.score-card .top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.score-card .top .meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.score-card .title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.score-card .title-row .date {
+  color: var(--ink-55);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.score-card .desc {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ink-55);
+}
+
+.score-card .foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.score-card .foot .bar {
+  flex: 1;
+}
+
+.score-card .chev {
+  color: var(--ink-55);
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+
+.score-card .score {
+  margin-left: 0;
+  flex-shrink: 0;
+}
+
+.wrong-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--wrong);
+  background: rgba(196, 75, 60, 0.1);
+  padding: 3px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.stat-card {
+  box-shadow: 0 4px 16px var(--shadow);
+}
+
+.page-wrong-book {
+  padding-bottom: 96px;
+}
+
+.wrong-card.showcase {
+  box-shadow: 0 4px 16px var(--shadow);
+  padding: 14px 16px;
+}
+
+.wrong-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.wrong-card-top .meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.wrong-card .kicker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.wrong-card .kicker .date {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ink-55);
+  font-weight: 600;
+}
+
+.wrong-meta-row {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--ink-55);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.wrong-answers {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ans-box {
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: rgba(22, 22, 22, 0.04);
+}
+
+.ans-box .lab {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-55);
+}
+
+.ans-box .val {
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ans-box.bad {
+  background: rgba(196, 75, 60, 0.1);
+}
+
+.ans-box.bad .lab,
+.ans-box.bad .val {
+  color: var(--wrong);
+}
+
+.ans-box.ok {
+  background: var(--amber-soft);
+}
+
+.ans-box.ok .lab,
+.ans-box.ok .val {
+  color: var(--amber);
+}
+
+.sticky-cta {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  padding: 12px 20px 28px;
+  background: linear-gradient(180deg, transparent, var(--bg) 28%);
+}
+
+.sticky-cta .btn {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 6px 16px rgba(196, 122, 26, 0.28);
+}
+
 

@@ -67,7 +67,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 ## LangGraph 运行时（方式 A + 判分）
 
-- **方式 A 出题**：`agents/textbook/graph.py` 固定 StateGraph（`load_units_text` → `generate_json_questions`），由 FastAPI **进程内** `invoke`；`POST /api/quizzes` 走该图
+- **方式 A 出题**：`agents/textbook/graph.py` 固定 StateGraph（`load_units_text` → `generate_json_questions`），由 FastAPI **进程内** `invoke`；`POST /api/quizzes` 走该图。生成节点对模型/校验失败（5xx）最多重试 3 次；题量非法等 4xx 不重试
 - **判分**：`agents/shared/grading_graph.py` StateGraph（准备输入 → Vision/演示回退 → draft）；`POST /api/grading/attempts` 走该图
 - **本期不挂 Checkpointer**（无跨请求 interrupt）；家长确认成绩仍为 REST，**不**走 graph interrupt
 - 若将来需要 `resume`，MUST 用 Postgres Checkpointer（见 `agents/shared/checkpointer.py`），**禁止** MemorySaver 作为生产默认
