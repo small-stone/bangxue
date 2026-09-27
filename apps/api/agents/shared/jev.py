@@ -17,6 +17,8 @@ class JevConfigError(RuntimeError):
 MISSING_COUNT = "count"
 MISSING_TOPIC = "topic"
 MISSING_COUNT_RANGE = "count_range"
+MISSING_GRADE = "grade"
+MISSING_SUBJECT = "subject"
 
 _MAX_COUNT = 100
 
@@ -99,6 +101,8 @@ def _local_completeness(transcript: str) -> CompletenessResult:
     topic_ok = _has_topic(text)
     subject = _extract_subject(text)
     grade = _extract_grade(text)
+    if subject is None and _looks_like_math(text):
+        subject = "数学"
 
     if count is not None and count > _MAX_COUNT:
         return CompletenessResult(
@@ -115,12 +119,21 @@ def _local_completeness(transcript: str) -> CompletenessResult:
     if count is None or count < 1:
         missing.append(MISSING_COUNT)
         count = None
-    if not topic_ok and not (subject and grade and count is not None):
-        if not topic_ok:
-            missing.append(MISSING_TOPIC)
+    if not topic_ok:
+        missing.append(MISSING_TOPIC)
+    if grade is None:
+        missing.append(MISSING_GRADE)
+    if subject is None:
+        missing.append(MISSING_SUBJECT)
 
-    if subject and not topic_ok and count is None:
-        missing = [MISSING_COUNT, MISSING_TOPIC]
+    # Deduplicate while preserving order
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for item in missing:
+        if item not in seen:
+            seen.add(item)
+            deduped.append(item)
+    missing = deduped
 
     enough = not missing
     confidence = 0.9 if enough else 0.85
@@ -155,6 +168,26 @@ def _has_topic(text: str) -> bool:
     return any(hint in text for hint in _TOPIC_HINTS)
 
 
+def _looks_like_math(text: str) -> bool:
+    math_hints = (
+        "口算",
+        "加减",
+        "乘除",
+        "乘法",
+        "除法",
+        "分数",
+        "小数",
+        "应用题",
+        "几何",
+        "面积",
+        "周长",
+        "体积",
+        "计算",
+        "数学",
+    )
+    return any(hint in text for hint in math_hints)
+
+
 def _extract_subject(text: str) -> str | None:
     for name in ("数学", "英语", "语文"):
         if name in text:
@@ -162,20 +195,55 @@ def _extract_subject(text: str) -> str | None:
     return None
 
 
+_GRADE_NAMES = ("一年级", "二年级", "三年级", "四年级", "五年级", "六年级")
+_GRADE_BY_DIGIT = {
+    "1": "一年级",
+    "2": "二年级",
+    "3": "三年级",
+    "4": "四年级",
+    "5": "五年级",
+    "6": "六年级",
+}
+# Arabic / fullwidth digits: "3年级", "３ 年级"
+_GRADE_DIGIT_RE = re.compile(r"(?P<n>[1-6１-６])\s*年级")
+
+
 def _extract_grade(text: str) -> str | None:
-    for name in ("一年级", "二年级", "三年级", "四年级", "五年级", "六年级"):
-        if name in text:
-            return name
-    return None
+    """Return the last explicit primary grade (Chinese or digit form)."""
+    hits: list[tuple[int, str]] = []
+    for name in _GRADE_NAMES:
+        start = 0
+        while True:
+            idx = text.find(name, start)
+            if idx < 0:
+                break
+            hits.append((idx, name))
+            start = idx + 1
+    for match in _GRADE_DIGIT_RE.finditer(text):
+        digit = match.group("n")
+        # Normalize fullwidth １–６ to ASCII
+        if "１" <= digit <= "６":
+            digit = chr(ord("1") + (ord(digit) - ord("１")))
+        name = _GRADE_BY_DIGIT.get(digit)
+        if name:
+            hits.append((match.start(), name))
+    if not hits:
+        return None
+    hits.sort(key=lambda item: item[0])
+    return hits[-1][1]
 
 
 def _follow_up_for(missing: list[str]) -> str:
     if not missing:
         return ""
     parts: list[str] = []
+    if MISSING_GRADE in missing:
+        parts.append("年级（例如一年级）")
+    if MISSING_SUBJECT in missing:
+        parts.append("科目（数学 / 语文 / 英语）")
     if MISSING_TOPIC in missing:
         parts.append("具体知识点或题型（例如两位数加减、口算）")
     if MISSING_COUNT in missing:
         parts.append(f"题量（1–{_MAX_COUNT} 道）")
     joined = "、".join(parts)
-    return f"为了帮孩子出合适的练习，请再补充：{joined}。"
+    return f"为了按教材出合适的练习，请再补充：{joined}。"

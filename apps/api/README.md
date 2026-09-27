@@ -37,7 +37,17 @@ python -m ingest query \
 
 同一五项元数据再次执行会先删除该书旧块再写入。识别不到单元标题时命令失败且不写库。
 - `agents/chat/` — 方式 B（对话 / DeepAgents）
-- `agents/shared/` — PDF、判分等共用能力
+- `agents/shared/` — PDF、判分、**教材混合检索**（BM25 + pgvector）等共用能力
+
+## 方式 B 混合检索
+
+对话出题在 Jev 判定信息足够后，于 **FastAPI 进程内** 对 `textbook_chunks` 做：
+
+1. 按学段 / 年级 / 科目 / 版本 / 学期过滤  
+2. **向量检索**（百炼 embedding + pgvector）与 **BM25**（`rank-bm25` + jieba）并行  
+3. RRF 融合 Top-K 课文，再交给百炼出题  
+
+无命中时追问，不静默编题。依赖见 `requirements.txt` 中的 `rank-bm25`、`jieba`。
 
 ## 本地运行
 
@@ -71,4 +81,4 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 - **判分**：`agents/shared/grading_graph.py` StateGraph（准备输入 → Vision/演示回退 → draft）；`POST /api/grading/attempts` 走该图
 - **本期不挂 Checkpointer**（无跨请求 interrupt）；家长确认成绩仍为 REST，**不**走 graph interrupt
 - 若将来需要 `resume`，MUST 用 Postgres Checkpointer（见 `agents/shared/checkpointer.py`），**禁止** MemorySaver 作为生产默认
-- 方式 B 对话仍为 DeepAgents + Postgres Checkpointer，不在本图内
+- 方式 B 对话仍为 DeepAgents + Postgres Checkpointer；出题前走 `agents/shared/retrieval.hybrid_retrieve`（BM25 + 向量）

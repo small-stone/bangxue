@@ -2,7 +2,7 @@
 
 ## Purpose
 
-让家长从首页进入「对话出题」，用自然语言多轮说明需求，由 DeepAgents harness 追问并生成题目，确认后进入与方式 A 共用的练习结果与 PDF。
+让家长从首页进入「对话出题」，用自然语言多轮说明需求，由 DeepAgents harness 追问并基于教材混合检索 grounding 生成题目，确认后进入与方式 A 共用的练习结果与 PDF。
 
 ## Requirements
 
@@ -25,15 +25,19 @@
 - **THEN** 同一会话继续，系统基于补充后的意图推进
 
 ### Requirement: Draft questions after enough intent
-当信息足够时，系统 MUST 使用百炼出题模型（默认 `qwen3.7-plus`，密钥 `bailian_api_key`）生成题目列表，并展示给家长确认。题目正文 MUST NOT 由 Jev 生成。缺密钥时 MUST 返回明确错误，MUST NOT 编造题目。
+当信息足够时，系统 MUST 先对教材库做混合检索得到相关课文，再使用百炼出题模型（默认 `qwen3.7-plus`，密钥 `bailian_api_key`）基于检索上下文生成题目列表，并展示给家长确认。题目正文 MUST NOT 由 Jev 生成。缺密钥时 MUST 返回明确错误，MUST NOT 编造题目。生成提示 MUST 要求题目紧扣所附课文，不要使用课文外知识点。
 
-#### Scenario: Enough detail yields a draft list
-- **WHEN** 家长说明科目或知识点、题量等已足够出题的信息
-- **THEN** 对话中出现可确认的题目列表（或等价确认视图）
+#### Scenario: Enough detail yields a grounded draft list
+- **WHEN** 家长说明科目或知识点、题量等已足够，且检索返回可用课文块
+- **THEN** 对话中出现可确认的题目列表（或等价确认视图），且出题调用附带了检索课文
 
 #### Scenario: Missing Bailian key
 - **WHEN** 服务未配置 `bailian_api_key` 却需要出题
 - **THEN** 接口返回配置错误说明，不返回伪造题目
+
+#### Scenario: Retrieval miss blocks free-form invent
+- **WHEN** 信息看似足够但混合检索无命中可用课文
+- **THEN** 系统追问或提示（如确认年级册次 / 换表述），MUST NOT 静默用无检索上下文的纯意图编题冒充教材题
 
 ### Requirement: Confirm then shared result and PDF
 家长确认题目后，系统 MUST 将本次练习标记为来源「对话」，保存对话主题摘要（或等价元数据），并进入与方式 A 共用的结果展示与练习 PDF 下载。确认前 MUST NOT 把该次练习当作已定稿卷对外提供最终 PDF。
@@ -46,12 +50,12 @@
 - **WHEN** 家长完成一次对话出题并确认
 - **THEN** 该练习元数据标明来源为对话，并带有对话主题摘要
 
-### Requirement: No textbook RAG required in phase one
-一期对话出题 MUST NOT 强制绑定教材单元或向量检索。若家长提到年级或科目，系统 MUST 将其作为生成约束写入练习元数据。
+### Requirement: Chat draft uses hybrid textbook retrieval
+方式 B 在进入题目草稿前 MUST 调用教材混合检索（BM25 + 向量融合）。练习元数据 MUST 记录检索所用的年级 / 科目等范围摘要（若有），来源仍标记为「对话」。
 
-#### Scenario: Free-form request without unit selection
-- **WHEN** 家长未选择任何教材单元，仅用对话描述「三年级口算 10 道」
-- **THEN** 系统仍可出题，且不要求先走教材选题页
+#### Scenario: Grounded chat quiz keeps chat source
+- **WHEN** 家长完成一次经检索 grounding 的对话出题并确认
+- **THEN** 练习来源仍为对话，且元数据可追溯所用教材范围摘要
 
 ### Requirement: Agent stays in-process
 方式 B 的 DeepAgents harness MUST 在 FastAPI 进程内调用。系统 MUST NOT 为此部署独立 Agent 服务。Harness MUST NOT 向家长会话暴露宿主机 shell 或任意写文件能力。

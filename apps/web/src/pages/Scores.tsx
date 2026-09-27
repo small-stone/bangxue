@@ -5,7 +5,6 @@ import { BottomNav, DemoBadge, GuestBadge } from '../chrome'
 import {
   DEMO_SPARK_HEIGHTS,
   DEMO_SPARK_PEAK_LABEL,
-  isDemoId,
   pickScoreShowcase,
 } from '../demoShowcase'
 import {
@@ -43,8 +42,6 @@ export default function Scores() {
   const [apiScores, setApiScores] = useState<GradeAttempt[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [notice, setNotice] = useState<string | null>(null)
-
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -95,10 +92,6 @@ export default function Scores() {
         )
 
   function openScore(item: GradeAttempt) {
-    if (isDemoId(item.id) || demo) {
-      setNotice('演示样例，登录并确认成绩后可查看真实详情')
-      return
-    }
     navigate(`/grade/result/${item.id}`)
   }
 
@@ -116,7 +109,9 @@ export default function Scores() {
         {demo && loggedIn ? (
           <p className="sub demo-hint">暂无真实成绩，以下为演示样例；判分确认后会出现在这里</p>
         ) : null}
-        {notice ? <p className="notice">{notice}</p> : null}
+        {demo && !loggedIn ? (
+          <p className="sub demo-hint">游客可先浏览演示样例，登录并确认成绩后可同步真实记录</p>
+        ) : null}
         {error && !demo ? <p className="notice error">{error}</p> : null}
 
         <div className="stats-row">

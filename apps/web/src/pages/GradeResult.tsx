@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { confirmAttempt, fetchAttempt, type GradeAttempt } from '../api'
 import { PageNav } from '../chrome'
+import { getDemoAttempt, isDemoId } from '../demoShowcase'
 import { BookIcon, ChartIcon, CheckIcon, CrossIcon, MessageIcon, SearchIcon } from '../icons'
 import { isLoggedIn } from '../session'
 
@@ -16,6 +17,18 @@ export default function GradeResult() {
   useEffect(() => {
     let cancelled = false
     void (async () => {
+      if (isDemoId(attemptId)) {
+        const demo = getDemoAttempt(attemptId)
+        if (!cancelled) {
+          if (demo) {
+            setAttempt(demo)
+            setError(null)
+          } else {
+            setError('未找到该演示成绩')
+          }
+        }
+        return
+      }
       try {
         const data = await fetchAttempt(attemptId)
         if (!cancelled) setAttempt(data)
@@ -30,6 +43,10 @@ export default function GradeResult() {
 
   async function onConfirm() {
     if (!attempt) return
+    if (attempt.demo || isDemoId(attempt.id)) {
+      setNotice('演示样例不可保存，登录并完成真实判分后可写入成绩')
+      return
+    }
     if (!isLoggedIn()) {
       setNotice('请先登录后再保存成绩')
       navigate('/login')
@@ -79,7 +96,10 @@ export default function GradeResult() {
   return (
     <div className="app-shell">
       <div className="page page-tab grade-result">
-        <PageNav title="判分结果" />
+        <PageNav
+          title="判分结果"
+          badge={attempt.demo || isDemoId(attempt.id) ? '演示' : undefined}
+        />
 
         <div className="score-ring-wrap">
           <div className="score-ring" style={ringStyle}>
@@ -121,7 +141,11 @@ export default function GradeResult() {
 
         {notice ? <p className="notice">{notice}</p> : null}
 
-        {!attempt.confirmed ? (
+        {attempt.demo || isDemoId(attempt.id) ? (
+          <p className="sub" style={{ textAlign: 'center', marginTop: 8 }}>
+            演示样例，不会写入真实成绩
+          </p>
+        ) : !attempt.confirmed ? (
           <button
             className="btn btn-amber btn-block"
             type="button"

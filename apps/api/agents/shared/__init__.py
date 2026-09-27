@@ -5,6 +5,7 @@ from agents.shared.checkpointer import CheckpointerConfigError, get_checkpointer
 from agents.shared.grading import GradeResult, demo_grade, grade_questions
 from agents.shared.grading_graph import build_grading_graph
 from agents.shared.jev import CompletenessResult, JevConfigError, judge_chat_completeness
+from agents.shared.retrieval import RetrievalError, hybrid_retrieve
 
 placeholder = "shared"
 
@@ -14,11 +15,13 @@ __all__ = [
     "CompletenessResult",
     "GradeResult",
     "JevConfigError",
+    "RetrievalError",
     "build_chat_model",
     "build_grading_graph",
     "demo_grade",
     "get_checkpointer",
     "grade_questions",
+    "hybrid_retrieve",
     "judge_chat_completeness",
     "placeholder",
     "require_bailian_api_key",

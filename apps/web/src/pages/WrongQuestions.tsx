@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { fetchAttempt, type GradeAttempt } from '../api'
 import { PageNav } from '../chrome'
+import { getDemoAttempt, isDemoId } from '../demoShowcase'
 import { CrossIcon } from '../icons'
 
 export default function WrongQuestions() {
@@ -13,6 +14,18 @@ export default function WrongQuestions() {
   useEffect(() => {
     let cancelled = false
     void (async () => {
+      if (isDemoId(attemptId)) {
+        const demo = getDemoAttempt(attemptId)
+        if (!cancelled) {
+          if (demo) {
+            setAttempt(demo)
+            setError(null)
+          } else {
+            setError('未找到该演示错题')
+          }
+        }
+        return
+      }
       try {
         const data = await fetchAttempt(attemptId)
         if (!cancelled) setAttempt(data)
@@ -55,7 +68,7 @@ export default function WrongQuestions() {
   return (
     <div className="app-shell">
       <div className="page">
-        <PageNav title="错题详情" />
+        <PageNav title="错题详情" badge={attempt.demo || isDemoId(attempt.id) ? '演示' : undefined} />
         <p className="sub">{attempt.title}</p>
 
         {wrong.length === 0 ? (

@@ -41,7 +41,7 @@ export default function Me() {
             ) : (
               <>
                 <div className="profile-name">点击登录</div>
-                <div className="profile-sub">登录后同步成绩与错题本</div>
+                <div className="profile-sub">可先体验演示成绩与错题本，登录后同步真实数据</div>
               </>
             )}
           </div>

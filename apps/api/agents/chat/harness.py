@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
@@ -29,6 +30,12 @@ from agents.shared.bailian import (
 )
 from agents.shared.checkpointer import get_checkpointer
 from agents.shared.jev import CompletenessResult, JevConfigError, judge_chat_completeness
+from agents.shared.retrieval import (
+    RetrievalError,
+    hybrid_retrieve,
+    join_chunk_texts,
+    retrieval_summary,
+)
 from app.question_format import normalize_options
 
 _HOST_TOOLS = frozenset(
@@ -48,6 +55,11 @@ _PROFILE_REGISTERED = False
 
 # thread_id -> session payload (draft lives here; checkpointer holds agent turns)
 _SESSIONS: dict[str, dict[str, Any]] = {}
+
+# Grounding context for draft_quiz tool within a single request.
+_SOURCE_TEXT: ContextVar[str] = ContextVar("chat_source_text", default="")
+_SOURCE_GRADE: ContextVar[str] = ContextVar("chat_source_grade", default="")
+_SOURCE_SUBJECT: ContextVar[str] = ContextVar("chat_source_subject", default="")
 
 
 class ChatError(Exception):
@@ -97,10 +109,16 @@ def build_agent(*, checkpointer: Any | None = None):
     @tool
     def draft_quiz(intent: str, count: int = 10, difficulty: str = "适中") -> str:
         """Draft printable quiz questions from the parent's stated intent."""
+        source_text = _SOURCE_TEXT.get()
+        if not source_text.strip():
+            raise ChatError("缺少教材检索上下文，无法出题。", 502)
         questions = generate_chat_questions(
             intent=intent,
             count=count,
             difficulty=difficulty,
+            grade=_SOURCE_GRADE.get() or None,
+            subject=_SOURCE_SUBJECT.get() or None,
+            source_text=source_text,
         )
         return json.dumps({"questions": questions}, ensure_ascii=False)
 
@@ -219,8 +237,52 @@ def handle_parent_message(thread_id: str, text: str) -> ChatTurnResult:
             meta=_meta_from_judgment(judgment),
         )
 
+    scope = _retrieval_scope(transcript, judgment)
     try:
-        questions = _draft_via_agent(thread_id, transcript, count)
+        chunks = hybrid_retrieve(
+            judgment.summary or transcript,
+            stage=scope["stage"],
+            grade=scope["grade"],
+            subject=scope["subject"],
+            edition=scope["edition"],
+            term=scope["term"],
+        )
+    except RetrievalError as exc:
+        raise ChatError(str(exc), 503) from exc
+
+    if not chunks:
+        reply = (
+            f"在{scope['grade']}{scope['subject']}{scope['edition']}{scope['term']}"
+            "里没有检索到相关课文。请确认该册已入库，或换个知识点再试。"
+        )
+        session["messages"].append({"role": "assistant", "content": reply})
+        session["draft"] = None
+        return ChatTurnResult(
+            status="clarifying",
+            assistant_text=reply,
+            summary=judgment.summary,
+            meta={**_meta_from_judgment(judgment), **scope},
+        )
+
+    source_text = join_chunk_texts(chunks)
+    summary_bit = retrieval_summary(
+        chunks,
+        stage=scope["stage"],
+        grade=scope["grade"],
+        subject=scope["subject"],
+        edition=scope["edition"],
+        term=scope["term"],
+    )
+
+    try:
+        questions = _draft_via_agent(
+            thread_id,
+            transcript,
+            count,
+            source_text=source_text,
+            grade=scope["grade"],
+            subject=scope["subject"],
+        )
     except BailianConfigError as exc:
         raise ChatError(str(exc), 503) from exc
     except ChatError:
@@ -231,7 +293,7 @@ def handle_parent_message(thread_id: str, text: str) -> ChatTurnResult:
     if not questions:
         raise ChatError("模型没有返回题目列表。", 502)
 
-    reply = f"已根据你的需求起草 {len(questions)} 道题，请确认后生成练习卷。"
+    reply = f"已根据教材内容起草 {len(questions)} 道题，请确认后生成练习卷。"
     session["messages"].append({"role": "assistant", "content": reply})
     session["draft"] = {
         "questions": questions,
@@ -240,7 +302,11 @@ def handle_parent_message(thread_id: str, text: str) -> ChatTurnResult:
         "difficulty": "适中",
     }
     session["summary"] = judgment.summary
-    session["meta"] = _meta_from_judgment(judgment)
+    session["meta"] = {
+        **_meta_from_judgment(judgment),
+        **scope,
+        "retrieval_summary": summary_bit,
+    }
     return ChatTurnResult(
         status="draft_ready",
         assistant_text=reply,
@@ -295,9 +361,13 @@ def generate_chat_questions(
     difficulty: str = "适中",
     grade: str | None = None,
     subject: str | None = None,
+    source_text: str | None = None,
 ) -> list[dict]:
     if not isinstance(count, int) or count < 1 or count > 100:
         raise ChatError("题量须为 1 至 100 道。", 400)
+    grounded = (source_text or "").strip()
+    if not grounded:
+        raise ChatError("缺少教材检索上下文，无法出题。", 502)
 
     api_key = require_bailian_api_key()
     model = quiz_model_name()
@@ -312,7 +382,7 @@ def generate_chat_questions(
             {
                 "role": "system",
                 "content": (
-                    f"你是{grade_bit}{subject_bit}出题助手。根据家长意图出题，不要超出所述范围。"
+                    f"你是{grade_bit}{subject_bit}出题助手。只根据给定课文出题，不要使用课文以外的知识点。"
                     "返回 JSON：{\"questions\":[{\"qtype\":\"选择题|填空题|计算题\",\"stem\":\"...\","
                     "\"options\":[\"A. …\",\"B. …\",\"C. …\",\"D. …\"],\"answer\":\"...\"}]}。"
                     "选择题 MUST 提供 options（至少 4 个 A-D 选项）；填空题和计算题不要 options。"
@@ -320,7 +390,13 @@ def generate_chat_questions(
                     "只返回题目 JSON，不要输出思考过程。"
                 ),
             },
-            {"role": "user", "content": intent},
+            {
+                "role": "user",
+                "content": (
+                    f"家长意图：{intent}\n"
+                    f"课文：\n{grounded}"
+                ),
+            },
         ],
     )
     payload = json.loads(response.choices[0].message.content or "{}")
@@ -351,25 +427,47 @@ def generate_chat_questions(
     return cleaned
 
 
-def _draft_via_agent(thread_id: str, intent: str, count: int) -> list[dict]:
-    """Prefer DeepAgents invoke; fall back to direct generation if tool result missing."""
-    checkpointer = get_checkpointer()
-    agent = build_agent(checkpointer=checkpointer)
-    config = {"configurable": {"thread_id": thread_id}}
-    prompt = (
-        f"家长需求如下，请调用 draft_quiz 生成题目。\n"
-        f"intent: {intent}\n"
-        f"count: {count}\n"
-        f"difficulty: 适中"
-    )
-    result = agent.invoke(
-        {"messages": [HumanMessage(content=prompt)]},
-        config=config,
-    )
-    questions = _questions_from_agent_result(result)
-    if questions:
-        return questions
-    return generate_chat_questions(intent=intent, count=count)
+def _draft_via_agent(
+    thread_id: str,
+    intent: str,
+    count: int,
+    *,
+    source_text: str,
+    grade: str,
+    subject: str,
+) -> list[dict]:
+    """Prefer DeepAgents invoke; fall back to direct grounded generation."""
+    token_text = _SOURCE_TEXT.set(source_text)
+    token_grade = _SOURCE_GRADE.set(grade)
+    token_subject = _SOURCE_SUBJECT.set(subject)
+    try:
+        checkpointer = get_checkpointer()
+        agent = build_agent(checkpointer=checkpointer)
+        config = {"configurable": {"thread_id": thread_id}}
+        prompt = (
+            f"家长需求如下，请调用 draft_quiz 生成题目（必须紧扣已检索课文）。\n"
+            f"intent: {intent}\n"
+            f"count: {count}\n"
+            f"difficulty: 适中"
+        )
+        result = agent.invoke(
+            {"messages": [HumanMessage(content=prompt)]},
+            config=config,
+        )
+        questions = _questions_from_agent_result(result)
+        if questions:
+            return questions
+        return generate_chat_questions(
+            intent=intent,
+            count=count,
+            grade=grade,
+            subject=subject,
+            source_text=source_text,
+        )
+    finally:
+        _SOURCE_TEXT.reset(token_text)
+        _SOURCE_GRADE.reset(token_grade)
+        _SOURCE_SUBJECT.reset(token_subject)
 
 
 def _questions_from_agent_result(result: dict[str, Any]) -> list[dict]:
@@ -400,6 +498,19 @@ def _meta_from_judgment(judgment: CompletenessResult) -> dict[str, Any]:
     if judgment.subject:
         meta["subject"] = judgment.subject
     return meta
+
+
+def _retrieval_scope(transcript: str, judgment: CompletenessResult) -> dict[str, str]:
+    grade = judgment.grade or ""
+    subject = judgment.subject or "数学"
+    term = "下册" if "下册" in transcript else "上册"
+    return {
+        "stage": "小学",
+        "grade": grade,
+        "subject": subject,
+        "edition": "人教版",
+        "term": term,
+    }
 
 
 def _default_count(text: str) -> int:

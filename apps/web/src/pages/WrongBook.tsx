@@ -2,11 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchWrongBook, type WrongBookItem } from '../api'
 import { DemoBadge, PageNav } from '../chrome'
-import {
-  isDemoId,
-  pickWrongShowcase,
-  type DemoWrongItem,
-} from '../demoShowcase'
+import { pickWrongShowcase, type DemoWrongItem } from '../demoShowcase'
 import {
   BookIcon,
   CalcIcon,
@@ -76,10 +72,6 @@ export default function WrongBook() {
   )
 
   function openItem(item: DemoWrongItem) {
-    if (showcase.demo || isDemoId(item.attempt_id)) {
-      setNotice('演示样例，登录并确认成绩后可查看真实错题')
-      return
-    }
     navigate(`/grade/wrong/${item.attempt_id}`)
   }
 
