@@ -11,6 +11,7 @@ from agents.shared.grading import GradeResult, grade_questions
 from app.quiz_store import get_quiz
 from app.score_store import (
     DATA_DIR,
+    ScoreStoreError,
     confirm_attempt,
     create_attempt,
     get_attempt,
@@ -45,10 +46,15 @@ def _attempt_public(row: dict) -> dict:
         "correct": row.get("correct"),
         "total": row.get("total"),
         "items": row.get("items") or [],
+        "photo_paths": row.get("photo_paths") or [],
         "created_at": row.get("created_at"),
         "confirmed_at": row.get("confirmed_at"),
         "email": row.get("email"),
     }
+
+
+def _db_http(exc: ScoreStoreError) -> HTTPException:
+    return HTTPException(status_code=503, detail=str(exc) or "成绩数据库不可用。")
 
 
 def _resolve_questions(
@@ -138,25 +144,31 @@ async def create_grading_attempt(
         }
         for item in result.items
     ]
-    record = create_attempt(
-        {
-            "demo": result.demo,
-            "quiz_id": quiz_id,
-            "source": meta["source"],
-            "subject": meta["subject"],
-            "title": meta["title"],
-            "correct": result.correct_count,
-            "total": result.total,
-            "items": items,
-            "photo_paths": photo_paths,
-        }
-    )
+    try:
+        record = create_attempt(
+            {
+                "demo": result.demo,
+                "quiz_id": quiz_id,
+                "source": meta["source"],
+                "subject": meta["subject"],
+                "title": meta["title"],
+                "correct": result.correct_count,
+                "total": result.total,
+                "items": items,
+                "photo_paths": photo_paths,
+            }
+        )
+    except ScoreStoreError as exc:
+        raise _db_http(exc) from exc
     return _attempt_public(record)
 
 
 @router.get("/grading/attempts/{attempt_id}")
 def read_grading_attempt(attempt_id: str) -> dict:
-    row = get_attempt(attempt_id)
+    try:
+        row = get_attempt(attempt_id)
+    except ScoreStoreError as exc:
+        raise _db_http(exc) from exc
     if row is None:
         raise HTTPException(status_code=404, detail="判分结果不存在或已失效。")
     return _attempt_public(row)
@@ -170,11 +182,13 @@ def confirm_grading_attempt(
     email = _normalize_email(x_parent_email)
     if not email:
         raise HTTPException(status_code=401, detail="请先登录后再保存成绩。")
-    row = get_attempt(attempt_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="判分结果不存在或已失效。")
     try:
+        row = get_attempt(attempt_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="判分结果不存在或已失效。")
         confirmed = confirm_attempt(attempt_id, email)
+    except ScoreStoreError as exc:
+        raise _db_http(exc) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="邮箱无效。") from exc
     if confirmed is None:
@@ -187,7 +201,10 @@ def scores_list(x_parent_email: ParentEmail = None) -> dict:
     email = _normalize_email(x_parent_email)
     if not email:
         return {"scores": [], "guest": True}
-    rows = list_confirmed_scores(email)
+    try:
+        rows = list_confirmed_scores(email)
+    except ScoreStoreError as exc:
+        raise _db_http(exc) from exc
     return {"scores": [_attempt_public(r) for r in rows], "guest": False}
 
 
@@ -196,4 +213,8 @@ def wrong_questions_list(x_parent_email: ParentEmail = None) -> dict:
     email = _normalize_email(x_parent_email)
     if not email:
         return {"items": [], "guest": True}
-    return {"items": list_wrong_questions(email), "guest": False}
+    try:
+        items = list_wrong_questions(email)
+    except ScoreStoreError as exc:
+        raise _db_http(exc) from exc
+    return {"items": items, "guest": False}

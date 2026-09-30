@@ -4,19 +4,28 @@ from bangxue_env import load_repo_env
 
 load_repo_env()
 
+import logging
+
 from fastapi import FastAPI
 
 from agents import chat, shared, textbook
 from agents.chat.routes import router as chat_router
 from app.grading_routes import router as grading_router
 from app.routes import router
-from app.score_store import ensure_data_dirs
+from app.score_store import ScoreStoreError, bootstrap_score_store
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="bangxue-api", version="0.0.1")
 app.include_router(router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(grading_router, prefix="/api")
-ensure_data_dirs()
+
+try:
+    bootstrap_score_store()
+except ScoreStoreError as exc:
+    # Allow process to start for health/textbook; score routes fail closed at call time.
+    logger.warning("Score store bootstrap skipped: %s", exc)
 
 
 @app.get("/health")

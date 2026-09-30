@@ -68,12 +68,15 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 # GET  /api/scores | /api/wrong-questions  按 X-Parent-Email 查询
 ```
 
-## 判分与成绩（一期演示）
+## 判分与成绩（Postgres）
 
-- **上传路径**：答卷图保存在 `apps/api/data/uploads/`（目录已 gitignore）
-- **成绩文件**：已确认成绩在 `apps/api/data/scores.json`，按家长邮箱分桶
+- **权威存储**：判分 attempt（含逐题结果、确认态、家长邮箱、`photo_paths`）在 PostgreSQL 表 `grade_attempts`；**必须**配置 `DATABASE_URL`（可与教材 / Checkpointer 共用）
+- **答卷文件**：二进制仍在 `apps/api/data/uploads/`（gitignore）；库中只存相对路径如 `uploads/<uuid>.jpg`，本期不把照片写入 BYTEA
+- **启动**：`bootstrap_score_store()` 建表；若存在旧版 `apps/api/data/scores.json` 会一次性导入（已存在 id 跳过）
+- **Fail closed**：无 `DATABASE_URL` 或库不可达时，成绩写/读接口返回 **503**，**不会**静默回退 JSON
 - **身份头**：`X-Parent-Email` 与前端本地登录邮箱一致；**非安全边界**，生产需换 JWT
 - **判分超时**：百炼视觉约 60s；失败或无 `bailian_api_key` 时默认走确定性**演示回退**（响应 `demo: true`）。设 `GRADING_DISABLE_DEMO=1` 可关闭回退
+- **游客演示**：前端 `demoShowcase` 夹具不入库；仅真实判分确认写入 `grade_attempts`
 
 ## LangGraph 运行时（方式 A + 判分）
 
