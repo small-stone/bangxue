@@ -20,14 +20,14 @@
 - **WHEN** 进程读不到 `bailian_api_key`，家长请求出题
 - **THEN** 接口返回配置错误，响应中没有题目
 
-### Requirement: Chat entry stays closed
+### Requirement: Chat entry is available in-process
 
-对话出题对家长 MUST 仍不可用。点击对话入口 MUST NOT 发起出题，也 MUST NOT 调用对话 harness。
+家长 MAY 通过首页「对话出题」进入对话流程。进入后系统 MUST 可创建会话并调用进程内对话 harness（经 Supervisor 编排），MUST NOT 再以「入口未开放」拦截该入口。对话 harness 仍 MUST 遵守本规格中「不得操作宿主机」的要求。
 
-#### Scenario: Choosing chat does not generate a paper
+#### Scenario: Choosing chat opens chat flow
 
 - **WHEN** 家长在首页点击对话出题
-- **THEN** 页面仍留在首页并说明对话出题尚未开放，且没有新的练习卷
+- **THEN** 进入对话出题流程并可创建会话，而不是被提示对话出题尚未开放
 
 ### Requirement: Chat harness cannot operate the host
 
