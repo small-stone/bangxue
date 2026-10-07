@@ -37,6 +37,7 @@ python -m ingest query \
 
 同一五项元数据再次执行会先删除该书旧块再写入。识别不到单元标题时命令失败且不写库。
 - `agents/chat/` — 方式 B（对话 / DeepAgents）
+- `agents/supervisor/` — 对话请求 **Supervisor**（路由 / 编排图）：追问、对话出题或教材式出题
 - `agents/shared/` — PDF、判分、**教材混合检索**（BM25 + pgvector）等共用能力
 
 ## 方式 B 混合检索
@@ -78,6 +79,13 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 - **判分超时**：百炼视觉约 60s；失败或无 `bailian_api_key` 时默认走确定性**演示回退**（响应 `demo: true`）。设 `GRADING_DISABLE_DEMO=1` 可关闭回退
 - **游客演示**：前端 `demoShowcase` 夹具不入库；仅真实判分确认写入 `grade_attempts`
 
+## 对话会话与练习卷（Postgres）
+
+- **`chat_sessions`**：对话出题权威状态（`messages` / `draft` / `summary` / `meta`）；进程内字典仅缓存。启动时 `bootstrap_session_store()` 建表
+- **`quiz_papers`**：确认前/确认后的练习卷权威存储（含 TTL）；默认 **7 天**（`QUIZ_PAPER_TTL_DAYS` 可覆盖）。启动时 `bootstrap_quiz_store()` 建表
+- **Fail closed**：无 `DATABASE_URL` 或库不可达时，创建/更新会话或保存练习卷返回 **503**，**不会**仅写内存冒充成功
+- **Checkpoint 命名空间**：同一 `thread_id` 上 Supervisor 使用 `checkpoint_ns=supervisor`，对话 DeepAgents harness 使用 `checkpoint_ns=chat-agent`，避免状态串台（旧空 ns 会话需新建）
+
 ## LangGraph 运行时（方式 A + 判分）
 
 - **方式 A 出题**：`agents/textbook/graph.py` 固定 StateGraph（`load_units_text` → `generate_json_questions`），由 FastAPI **进程内** `invoke`；`POST /api/quizzes` 走该图。生成节点对模型/校验失败（5xx）最多重试 3 次；题量非法等 4xx 不重试
@@ -85,3 +93,10 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 - **本期不挂 Checkpointer**（无跨请求 interrupt）；家长确认成绩仍为 REST，**不**走 graph interrupt
 - 若将来需要 `resume`，MUST 用 Postgres Checkpointer（见 `agents/shared/checkpointer.py`），**禁止** MemorySaver 作为生产默认
 - 方式 B 对话仍为 DeepAgents + Postgres Checkpointer；出题前走 `agents/shared/retrieval.hybrid_retrieve`（BM25 + 向量）
+
+## Supervisor（对话路径编排）
+
+- **挂载点**：仅对话出题（`handle_parent_message` / `/api/chat/...`）。首页 **双入口保留**：按教材出题仍直连 `POST /api/quizzes`，**不**强制经 Supervisor
+- **图**：`agents/supervisor` LangGraph：`route → clarify | chat_draft | textbook_quiz`
+- **Checkpointer**：Supervisor `compile` 使用与对话相同的 **Postgres** Checkpointer（`agents/shared/checkpointer.py`）；生产禁止默认 MemorySaver；invoke 时 `checkpoint_ns=supervisor`（对话 harness 为 `chat-agent`）
+- **教材式交接**：对话中明确单元时可走 `run_textbook_quiz`；确认后 quiz `source` 仍为 `chat`，meta 含 `via=textbook_quiz`

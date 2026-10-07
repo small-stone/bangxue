@@ -1,7 +1,6 @@
 """Grade-one through grade-six primary math generation from ingested chunks."""
 
 import json
-import os
 from collections.abc import Callable, Sequence
 
 import psycopg
@@ -141,49 +140,57 @@ def _unit_names(conn: psycopg.Connection, meta: dict[str, str]) -> list[str]:
 
 
 def _bailian_generator(**kwargs) -> list[dict]:
-    api_key = os.environ.get("bailian_api_key")
-    if not api_key:
-        raise TextbookError("暂时无法出题：未配置 bailian_api_key。", 503)
-    from openai import OpenAI
+    """One-shot JSON quiz generation via the shared Bailian chat model factory."""
+    from agents.shared.bailian import BailianConfigError, build_chat_model
 
-    model = os.environ.get("QUIZ_MODEL", "qwen3.7-plus")
-    base_url = os.environ.get(
-        "BAILIAN_BASE_URL",
-        "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    )
+    try:
+        model = build_chat_model().bind(response_format={"type": "json_object"})
+    except BailianConfigError as exc:
+        raise TextbookError(str(exc), 503) from exc
+
     include_answers = kwargs["include_answers"]
     grade = kwargs.get("grade") or "一年级"
     answer_rule = "每题包含 answer。" if include_answers else "不要包含 answer 字段。"
-    client = OpenAI(api_key=api_key, base_url=base_url)
-    response = client.chat.completions.create(
-        model=model,
-        response_format={"type": "json_object"},
-        extra_body={"enable_thinking": False},
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    f"你是{grade}小学数学出题助手。只根据给定课文出题，不要使用课文以外的知识点。"
-                    "返回 JSON：{\"questions\":[{\"qtype\":\"选择题|填空题|计算题\",\"stem\":\"...\","
-                    "\"options\":[\"A. …\",\"B. …\",\"C. …\",\"D. …\"]}]}。"
-                    "选择题 MUST 提供 options（至少 4 个 A-D 选项）；填空题和计算题不要 options。"
-                    f"题目数量必须正好是指定数量。{answer_rule}"
-                    "只返回题目 JSON，不要输出思考过程。"
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"难度：{kwargs['difficulty']}\n"
-                    f"题量：{kwargs['count']}\n"
-                    "题型比例：选择题 40%，填空题 30%，计算题 30%。\n"
-                    f"课文：\n{kwargs['source_text']}"
-                ),
-            },
-        ],
+    system = (
+        f"你是{grade}小学数学出题助手。只根据给定课文出题，不要使用课文以外的知识点。"
+        "返回 JSON：{\"questions\":[{\"qtype\":\"选择题|填空题|计算题\",\"stem\":\"...\","
+        "\"options\":[\"A. …\",\"B. …\",\"C. …\",\"D. …\"],"
+        "\"scene\":{\"kind\":\"row_of_groups\",\"item\":\"fish|strawberry|apple|star|circle\","
+        "\"groups\":[{\"count\":1to10}]}}]}。"
+        "选择题 MUST 提供 options（至少 4 个 A-D 选项）；填空题和计算题不要 options。"
+        "若题干依赖看图数一数/合起来，MUST 附带 scene（kind 固定为 row_of_groups；"
+        "groups[].count 之和或序数须与题干和答案一致；每组 count 为 1–10）。"
+        "纯计算或不依赖图示的题 MUST NOT 带 scene。"
+        "禁止用「见课文插图」代替 scene；不要输出 SVG 或图片 URL。"
+        f"题目数量必须正好是指定数量。{answer_rule}"
+        "只返回题目 JSON，不要输出思考过程。"
     )
-    message = response.choices[0].message
-    payload = json.loads(message.content or "{}")
+    user = (
+        f"难度：{kwargs['difficulty']}\n"
+        f"题量：{kwargs['count']}\n"
+        "题型比例：选择题 40%，填空题 30%，计算题 30%。\n"
+        "若课文涉及数一数/合起来/看图，请至少出一部分带 scene 的看图题。\n"
+        f"课文：\n{kwargs['source_text']}"
+    )
+    try:
+        message = model.invoke(
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ]
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise TextbookError(f"暂时无法出题：{exc}", 503) from exc
+
+    content = getattr(message, "content", None) or ""
+    if isinstance(content, list):
+        content = "".join(
+            part.get("text", "") if isinstance(part, dict) else str(part) for part in content
+        )
+    try:
+        payload = json.loads(content or "{}")
+    except json.JSONDecodeError as exc:
+        raise TextbookError("模型没有返回合法 JSON。", 502) from exc
     questions = payload.get("questions")
     if not isinstance(questions, list):
         raise TextbookError("模型没有返回题目列表。", 502)

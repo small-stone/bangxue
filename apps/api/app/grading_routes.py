@@ -8,7 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
 from agents.shared.grading import GradeResult, grade_questions
-from app.quiz_store import get_quiz
+from app.quiz_store import QuizStoreError, get_quiz
 from app.score_store import (
     DATA_DIR,
     ScoreStoreError,
@@ -63,7 +63,10 @@ def _resolve_questions(
 ) -> tuple[list[dict], dict]:
     """Return (questions, meta) from live quiz or client snapshot."""
     meta: dict = {"title": "练习", "subject": "数学", "source": "textbook"}
-    quiz = get_quiz(quiz_id) if quiz_id else None
+    try:
+        quiz = get_quiz(quiz_id) if quiz_id else None
+    except QuizStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     if quiz is not None:
         questions = quiz.get("questions") or []
         q_meta = quiz.get("meta") or {}

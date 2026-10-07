@@ -751,6 +751,17 @@ button.card.amber .icon-well {
   color: var(--ink-80);
 }
 
+.paper-sheet .q-illustration {
+  margin: 8px 0;
+  overflow-x: auto;
+}
+
+.paper-sheet .q-illustration svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
 .draft-panel .q-options {
   list-style: none;
   margin: 4px 0 8px;

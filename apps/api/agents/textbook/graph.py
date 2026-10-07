@@ -7,6 +7,7 @@ from typing import Any, NotRequired, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
+from agents.shared.illustrations import attach_illustration
 from agents.textbook.generate import (
     TextbookError,
     _bailian_generator,
@@ -73,7 +74,10 @@ def _clean_generated_questions(
             row["options"] = options
         if include_answers:
             row["answer"] = str(item.get("answer", "")).strip()
-        cleaned.append(row)
+        if "scene" in item:
+            row["scene"] = item.get("scene")
+        # Validate scene and render SVG; invalid scenes drop illustration only.
+        cleaned.append(attach_illustration(row))
     return cleaned, None, None
 
 

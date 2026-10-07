@@ -40,6 +40,13 @@ export default function Result() {
                     <span className="answer"> 答案：{question.answer}</span>
                   ) : null}
                 </p>
+                {question.illustration?.svg ? (
+                  <div
+                    className="q-illustration"
+                    aria-hidden="true"
+                    dangerouslySetInnerHTML={{ __html: question.illustration.svg }}
+                  />
+                ) : null}
                 {question.options && question.options.length > 0 ? (
                   <ul className="q-options">
                     {question.options.map((option) => (
@@ -60,8 +67,13 @@ export default function Result() {
       </div>
       <footer className="result-foot">
         <a className="btn btn-amber btn-block" href={`/api/quizzes/${quiz.id}/paper.pdf`}>
-          下载 PDF
+          下载练习 PDF
         </a>
+        {quiz.includeAnswers ? (
+          <a className="btn btn-outline amber btn-block" href={`/api/quizzes/${quiz.id}/answers.pdf`}>
+            下载答案卷
+          </a>
+        ) : null}
         <button className="btn btn-outline amber btn-block" type="button" onClick={() => navigate('/grade/upload')}>
           <CameraIcon size={18} />
           去拍照判分

@@ -7,8 +7,7 @@ from pydantic import BaseModel, Field
 from agents.textbook.generate import TextbookError, list_units
 from agents.textbook.graph import run_textbook_quiz
 from app.pdf_paper import render_pdf
-from app.question_format import format_question_body
-from app.quiz_store import get_quiz, save_quiz
+from app.quiz_store import QuizStoreError, get_quiz, save_quiz
 
 router = APIRouter()
 
@@ -64,20 +63,23 @@ def create_quiz(body: QuizRequest) -> dict:
     except TextbookError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     title = f"{body.grade}{body.subject} · {'、'.join(units)}练习"
-    quiz_id = save_quiz(
-        {
-            "title": title,
-            "questions": questions,
-            "include_answers": include_answers,
-            "meta": {
-                "grade": body.grade,
-                "subject": body.subject,
-                "units": units,
-                "count": count,
-                "difficulty": difficulty,
-            },
-        }
-    )
+    try:
+        quiz_id = save_quiz(
+            {
+                "title": title,
+                "questions": questions,
+                "include_answers": include_answers,
+                "meta": {
+                    "grade": body.grade,
+                    "subject": body.subject,
+                    "units": units,
+                    "count": count,
+                    "difficulty": difficulty,
+                },
+            }
+        )
+    except QuizStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"id": quiz_id, "title": title, "questions": questions}
 
 
@@ -92,22 +94,25 @@ def answers_pdf(quiz_id: str) -> Response:
 
 
 def _pdf_response(quiz_id: str, *, answers: bool) -> Response:
-    quiz = get_quiz(quiz_id)
+    try:
+        quiz = get_quiz(quiz_id)
+    except QuizStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     if quiz is None:
         raise HTTPException(status_code=404, detail="练习已失效，请重新出题。")
     if answers and not quiz["include_answers"]:
         raise HTTPException(status_code=404, detail="这次没有生成答案卷。")
     if answers:
-        lines = [
-            format_question_body(item, include_answer=True) for item in quiz["questions"]
-        ]
         title = quiz["title"] + "（答案）"
         filename = "answers.pdf"
     else:
-        lines = [format_question_body(item, include_answer=False) for item in quiz["questions"]]
         title = quiz["title"]
         filename = "paper.pdf"
-    payload = render_pdf(title=title, lines=lines)
+    payload = render_pdf(
+        title=title,
+        questions=quiz["questions"],
+        include_answer=answers,
+    )
     return Response(
         content=payload,
         media_type="application/pdf",

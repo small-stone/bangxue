@@ -37,6 +37,13 @@ from agents.shared.retrieval import (
     retrieval_summary,
 )
 from app.question_format import normalize_options
+from app.session_store import (
+    SessionStoreError,
+    empty_session,
+    load_session,
+    save_session,
+    session_exists as store_session_exists,
+)
 
 _HOST_TOOLS = frozenset(
     {
@@ -53,7 +60,10 @@ _HOST_TOOLS = frozenset(
 
 _PROFILE_REGISTERED = False
 
-# thread_id -> session payload (draft lives here; checkpointer holds agent turns)
+# Distinct from Supervisor (`supervisor`) so shared thread_id does not collide.
+CHAT_CHECKPOINT_NS = "chat-agent"
+
+# Process-local cache only; PostgreSQL is authoritative (see session_store).
 _SESSIONS: dict[str, dict[str, Any]] = {}
 
 # Grounding context for draft_quiz tool within a single request.
@@ -142,105 +152,178 @@ def build_agent(*, checkpointer: Any | None = None):
 
 
 def create_session() -> str:
-    """Create a chat thread and seed the Postgres checkpointer."""
+    """Create a chat thread, persist session, and seed the Postgres checkpointer."""
     from langgraph.checkpoint.base import empty_checkpoint
 
     thread_id = uuid4().hex
+    session = empty_session()
+    try:
+        save_session(thread_id, session)
+    except SessionStoreError as exc:
+        raise ChatError(str(exc), 503) from exc
+    _SESSIONS[thread_id] = session
+
     checkpointer = get_checkpointer()
-    config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+    config = {
+        "configurable": {"thread_id": thread_id, "checkpoint_ns": CHAT_CHECKPOINT_NS}
+    }
     checkpointer.put(
         config,
         empty_checkpoint(),
         {"source": "input", "step": -1, "writes": {}, "parents": {}},
         {},
     )
-    _SESSIONS[thread_id] = {
-        "messages": [],
-        "draft": None,
-        "summary": "",
-        "meta": {},
-    }
     return thread_id
 
 
 def session_exists(thread_id: str) -> bool:
     if thread_id in _SESSIONS:
         return True
-    checkpointer = get_checkpointer()
-    config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
-    return checkpointer.get_tuple(config) is not None
+    try:
+        return store_session_exists(thread_id)
+    except SessionStoreError as exc:
+        raise ChatError(str(exc), 503) from exc
 
 
 def get_session(thread_id: str) -> dict[str, Any]:
-    if thread_id not in _SESSIONS:
-        if not session_exists(thread_id):
-            raise ChatError("对话会话不存在或已失效。", 404)
-        _SESSIONS[thread_id] = {
-            "messages": [],
-            "draft": None,
-            "summary": "",
-            "meta": {},
-        }
-    return _SESSIONS[thread_id]
+    if thread_id in _SESSIONS:
+        return _SESSIONS[thread_id]
+    try:
+        loaded = load_session(thread_id)
+    except SessionStoreError as exc:
+        raise ChatError(str(exc), 503) from exc
+    if loaded is None:
+        raise ChatError("对话会话不存在或已失效。", 404)
+    _SESSIONS[thread_id] = loaded
+    return loaded
+
+
+def persist_session(thread_id: str) -> None:
+    """Write cached session payload to the authoritative store."""
+    session = _SESSIONS.get(thread_id)
+    if session is None:
+        return
+    try:
+        save_session(thread_id, session)
+    except SessionStoreError as exc:
+        raise ChatError(str(exc), 503) from exc
 
 
 def handle_parent_message(thread_id: str, text: str) -> ChatTurnResult:
-    """Jev gate then clarify or draft. Invokes DeepAgents when drafting."""
+    """Route via in-process Supervisor, then clarify / chat draft / textbook quiz."""
     text = (text or "").strip()
     if not text:
         raise ChatError("请先输入出题需求。")
 
     session = get_session(thread_id)
     session["messages"].append({"role": "user", "content": text})
+    persist_session(thread_id)
     transcript = "\n".join(m["content"] for m in session["messages"] if m["role"] == "user")
 
+    from agents.supervisor import run_supervisor
+
     try:
-        judgment = judge_chat_completeness(transcript)
-    except JevConfigError as exc:
-        raise ChatError(str(exc), 503) from exc
+        out = run_supervisor(thread_id, text, transcript=transcript)
+    except ChatError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise ChatError(f"暂时无法出题：{exc}", 503) from exc
 
-    if not judgment.enough or judgment.confidence < 0.6:
-        reply = judgment.follow_up or "请再补充题量和具体知识点。"
-        session["messages"].append({"role": "assistant", "content": reply})
-        session["draft"] = None
-        return ChatTurnResult(
-            status="clarifying",
-            assistant_text=reply,
-            summary=judgment.summary,
-            meta=_meta_from_judgment(judgment),
-        )
+    return ChatTurnResult(
+        status=str(out.get("status") or "clarifying"),
+        assistant_text=str(out.get("assistant_text") or ""),
+        questions=list(out.get("questions") or []),
+        summary=str(out.get("summary") or ""),
+        meta=dict(out.get("meta") or {}),
+    )
 
+
+def apply_clarify(thread_id: str, decision) -> ChatTurnResult:
+    """Supervisor clarify node: follow-up only, clear draft."""
+    session = get_session(thread_id)
+    reply = (getattr(decision, "follow_up", None) or "").strip() or (
+        "请补充年级（或学段）、具体知识点和题量（1–100 道）。"
+    )
+    session["messages"].append({"role": "assistant", "content": reply})
+    session["draft"] = None
+    from agents.supervisor.route import decision_to_meta
+
+    meta = decision_to_meta(decision)
+    persist_session(thread_id)
+    return ChatTurnResult(
+        status="clarifying",
+        assistant_text=reply,
+        summary=getattr(decision, "summary", "") or "",
+        meta=meta,
+    )
+
+
+def apply_chat_draft(thread_id: str, transcript: str, decision) -> ChatTurnResult:
+    """Supervisor chat_draft node: hybrid retrieve + DeepAgents / grounded generate."""
+    session = get_session(thread_id)
     try:
         require_bailian_api_key()
     except BailianConfigError as exc:
         raise ChatError(str(exc), 503) from exc
 
-    count = judgment.count or _default_count(transcript)
+    from agents.supervisor.route import RouteDecision, decision_to_meta
+
+    count = getattr(decision, "count", None) or _default_count(transcript)
     if count > 100:
-        reply = "题量最多 100 道，请改到 1–100 之间再告诉我。"
-        session["messages"].append({"role": "assistant", "content": reply})
-        session["draft"] = None
-        return ChatTurnResult(
-            status="clarifying",
-            assistant_text=reply,
-            summary=judgment.summary,
-            meta=_meta_from_judgment(judgment),
+        return apply_clarify(
+            thread_id,
+            RouteDecision(
+                route="clarify",
+                follow_up="题量最多 100 道，请改到 1–100 之间再告诉我。",
+                summary=getattr(decision, "summary", ""),
+                count=count,
+                reason="count_out_of_range",
+            ),
         )
     if count < 1:
-        reply = "请告诉我要出几道题（1–100 道）。"
-        session["messages"].append({"role": "assistant", "content": reply})
-        session["draft"] = None
-        return ChatTurnResult(
-            status="clarifying",
-            assistant_text=reply,
-            summary=judgment.summary,
-            meta=_meta_from_judgment(judgment),
+        return apply_clarify(
+            thread_id,
+            RouteDecision(
+                route="clarify",
+                follow_up="请告诉我要出几道题（1–100 道）。",
+                summary=getattr(decision, "summary", ""),
+                reason="count_missing",
+            ),
         )
 
-    scope = _retrieval_scope(transcript, judgment)
+    scope = {
+        "stage": "小学",
+        "grade": getattr(decision, "grade", "") or "",
+        "subject": getattr(decision, "subject", "") or "数学",
+        "edition": getattr(decision, "edition", "") or "人教版",
+        "term": getattr(decision, "term", "") or "上册",
+    }
+    # Fall back to Jev completeness for grade if route omitted it.
+    if not scope["grade"]:
+        try:
+            judgment = judge_chat_completeness(transcript)
+            if judgment.grade:
+                scope["grade"] = judgment.grade
+            if judgment.subject:
+                scope["subject"] = judgment.subject
+        except JevConfigError:
+            pass
+    if not scope["grade"]:
+        return apply_clarify(
+            thread_id,
+            RouteDecision(
+                route="clarify",
+                follow_up="请补充年级（如三年级）和知识点、题量（1–100 道）。",
+                summary=getattr(decision, "summary", ""),
+                count=count,
+                reason="missing_grade",
+            ),
+        )
+
+    query = getattr(decision, "summary", "") or transcript
     try:
         chunks = hybrid_retrieve(
-            judgment.summary or transcript,
+            query,
             stage=scope["stage"],
             grade=scope["grade"],
             subject=scope["subject"],
@@ -257,11 +340,12 @@ def handle_parent_message(thread_id: str, text: str) -> ChatTurnResult:
         )
         session["messages"].append({"role": "assistant", "content": reply})
         session["draft"] = None
+        persist_session(thread_id)
         return ChatTurnResult(
             status="clarifying",
             assistant_text=reply,
-            summary=judgment.summary,
-            meta={**_meta_from_judgment(judgment), **scope},
+            summary=getattr(decision, "summary", "") or "",
+            meta={**decision_to_meta(decision), **scope},
         )
 
     source_text = join_chunk_texts(chunks)
@@ -299,26 +383,115 @@ def handle_parent_message(thread_id: str, text: str) -> ChatTurnResult:
         "questions": questions,
         "include_answers": True,
         "count": len(questions),
-        "difficulty": "适中",
+        "difficulty": getattr(decision, "difficulty", None) or "适中",
     }
-    session["summary"] = judgment.summary
+    summary = getattr(decision, "summary", "") or query
+    session["summary"] = summary
     session["meta"] = {
-        **_meta_from_judgment(judgment),
+        **decision_to_meta(decision),
         **scope,
         "retrieval_summary": summary_bit,
     }
+    persist_session(thread_id)
     return ChatTurnResult(
         status="draft_ready",
         assistant_text=reply,
         questions=questions,
-        summary=judgment.summary,
+        summary=summary,
+        meta=session["meta"],
+    )
+
+
+def apply_textbook_quiz(thread_id: str, decision) -> ChatTurnResult:
+    """Supervisor textbook_quiz node: Mode A graph with chat session draft."""
+    from agents.textbook.generate import TextbookError
+    from agents.textbook.graph import run_textbook_quiz
+    from agents.supervisor.route import RouteDecision, decision_to_meta
+
+    session = get_session(thread_id)
+    units = list(getattr(decision, "units", None) or [])
+    count = getattr(decision, "count", None) or 10
+    if count not in {10, 15, 20, 30}:
+        # Snap to nearest allowed Mode A tier for textbook graph.
+        count = min({10, 15, 20, 30}, key=lambda x: abs(x - int(count)))
+    grade = getattr(decision, "grade", "") or "一年级"
+    term = getattr(decision, "term", "") or "上册"
+    subject = getattr(decision, "subject", "") or "数学"
+    edition = getattr(decision, "edition", "") or "人教版"
+    difficulty = getattr(decision, "difficulty", "") or "适中"
+
+    if not units:
+        return apply_clarify(
+            thread_id,
+            RouteDecision(
+                route="clarify",
+                follow_up="请说明要出哪一个单元（例如「一年级上册 数学游戏 出 10 道」）。",
+                summary=getattr(decision, "summary", ""),
+                reason="missing_units",
+            ),
+        )
+
+    try:
+        questions = run_textbook_quiz(
+            units=units,
+            count=count,
+            difficulty=difficulty,
+            include_answers=True,
+            stage="小学",
+            grade=grade,
+            subject=subject,
+            edition=edition,
+            term=term,
+        )
+    except TextbookError as exc:
+        return apply_clarify(
+            thread_id,
+            RouteDecision(
+                route="clarify",
+                follow_up=str(exc),
+                summary=getattr(decision, "summary", ""),
+                grade=grade,
+                units=units,
+                count=count,
+                reason="textbook_error",
+            ),
+        )
+
+    reply = (
+        f"已按教材单元「{'、'.join(units)}」起草 {len(questions)} 道题，请确认后生成练习卷。"
+    )
+    session["messages"].append({"role": "assistant", "content": reply})
+    session["draft"] = {
+        "questions": questions,
+        "include_answers": True,
+        "count": len(questions),
+        "difficulty": difficulty,
+    }
+    summary = getattr(decision, "summary", "") or f"{grade}{'、'.join(units)}"
+    session["summary"] = summary
+    session["meta"] = {
+        **decision_to_meta(decision),
+        "via": "textbook_quiz",
+        "stage": "小学",
+        "grade": grade,
+        "subject": subject,
+        "edition": edition,
+        "term": term,
+        "units": units,
+    }
+    persist_session(thread_id)
+    return ChatTurnResult(
+        status="draft_ready",
+        assistant_text=reply,
+        questions=questions,
+        summary=summary,
         meta=session["meta"],
     )
 
 
 def confirm_session(thread_id: str) -> dict[str, Any]:
     """Persist draft into the shared quiz store and return quiz payload fields."""
-    from app.quiz_store import save_quiz
+    from app.quiz_store import QuizStoreError, save_quiz
 
     session = get_session(thread_id)
     draft = session.get("draft")
@@ -328,20 +501,23 @@ def confirm_session(thread_id: str) -> dict[str, Any]:
     questions = draft["questions"]
     summary = session.get("summary") or "对话出题"
     title = f"对话练习 · {summary[:40]}"
-    quiz_id = save_quiz(
-        {
-            "title": title,
-            "questions": questions,
-            "include_answers": bool(draft.get("include_answers", True)),
-            "meta": {
-                "source": "chat",
-                "summary": summary,
-                "count": len(questions),
-                "difficulty": draft.get("difficulty", "适中"),
-                **(session.get("meta") or {}),
-            },
-        }
-    )
+    try:
+        quiz_id = save_quiz(
+            {
+                "title": title,
+                "questions": questions,
+                "include_answers": bool(draft.get("include_answers", True)),
+                "meta": {
+                    "source": "chat",
+                    "summary": summary,
+                    "count": len(questions),
+                    "difficulty": draft.get("difficulty", "适中"),
+                    **(session.get("meta") or {}),
+                },
+            }
+        )
+    except QuizStoreError as exc:
+        raise ChatError(str(exc), 503) from exc
     return {
         "id": quiz_id,
         "title": title,
@@ -443,7 +619,12 @@ def _draft_via_agent(
     try:
         checkpointer = get_checkpointer()
         agent = build_agent(checkpointer=checkpointer)
-        config = {"configurable": {"thread_id": thread_id}}
+        config = {
+            "configurable": {
+                "thread_id": thread_id,
+                "checkpoint_ns": CHAT_CHECKPOINT_NS,
+            }
+        }
         prompt = (
             f"家长需求如下，请调用 draft_quiz 生成题目（必须紧扣已检索课文）。\n"
             f"intent: {intent}\n"

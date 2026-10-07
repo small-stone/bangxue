@@ -13,11 +13,21 @@ export type Draft = {
   includeAnswers: boolean
 }
 
+export type QuestionIllustration = {
+  scene?: {
+    kind: string
+    item: string
+    groups: { count: number }[]
+  }
+  svg?: string
+}
+
 export type Question = {
   qtype: string
   stem: string
   options?: string[]
   answer?: string
+  illustration?: QuestionIllustration
 }
 
 export type QuizPayload = {

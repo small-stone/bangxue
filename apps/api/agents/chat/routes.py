@@ -41,7 +41,11 @@ def open_session() -> dict:
 
 @router.post("/sessions/{thread_id}/messages")
 def post_message(thread_id: str, body: MessageBody) -> StreamingResponse:
-    if not session_exists(thread_id):
+    try:
+        exists = session_exists(thread_id)
+    except Exception as exc:  # noqa: BLE001
+        raise _http_error(exc) from exc
+    if not exists:
         raise HTTPException(status_code=404, detail="对话会话不存在或已失效。")
 
     def event_stream():
