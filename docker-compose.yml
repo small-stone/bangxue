@@ -1,0 +1,58 @@
+# Single-host deploy: web (Nginx SPA + /api proxy) + api (FastAPI/agents) + db (pgvector).
+# No separate Agent service — agents run in-process inside api.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bangxue}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bangxue}
+      POSTGRES_DB: ${POSTGRES_DB:-bangxue}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-bangxue} -d ${POSTGRES_DB:-bangxue}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://bangxue:bangxue@db:5432/bangxue}
+      bailian_api_key: ${bailian_api_key:-}
+      QUIZ_MODEL: ${QUIZ_MODEL:-qwen3.7-plus}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-qwen3.7-text-embedding}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-bailian}
+      QUIZ_PAPER_TTL_DAYS: ${QUIZ_PAPER_TTL_DAYS:-7}
+      GRADING_DISABLE_DEMO: ${GRADING_DISABLE_DEMO:-}
+    volumes:
+      - api_data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+    # Internal only — reach via web nginx /api
+    expose:
+      - "8000"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  api_data:

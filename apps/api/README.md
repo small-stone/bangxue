@@ -69,6 +69,18 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 # GET  /api/scores | /api/wrong-questions  按 X-Parent-Email 查询
 ```
 
+## Docker Compose（单机部署）
+
+仓库根目录提供 `docker-compose.yml`：`web` + `api` + `db`（pgvector），**无**独立 Agent 服务。详见 [`deploy/README.md`](../../deploy/README.md)。
+
+```bash
+# 仓库根
+cp .env.example .env   # 填 bailian_api_key 等
+docker compose up -d --build
+# http://127.0.0.1:8080/ 与 http://127.0.0.1:8080/health
+```
+
+本机已入库的教材向量**不会**进镜像；上线请按 `deploy/README.md` 做 **pg_dump → 传到 VPS → pg_restore**，或在服务器重新 `ingest`。
 ## 判分与成绩（Postgres）
 
 - **权威存储**：判分 attempt（含逐题结果、确认态、家长邮箱、`photo_paths`）在 PostgreSQL 表 `grade_attempts`；**必须**配置 `DATABASE_URL`（可与教材 / Checkpointer 共用）

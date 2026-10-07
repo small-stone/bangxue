@@ -10,7 +10,20 @@ from fpdf import FPDF
 from agents.shared.illustrations import SceneValidationError, render_png
 from app.question_format import format_question_body
 
-_FONT = "/System/Library/Fonts/Supplemental/Songti.ttc"
+_FONT_CANDIDATES = (
+    "/System/Library/Fonts/Supplemental/Songti.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+)
+
+
+def _resolve_cjk_font() -> str:
+    for path in _FONT_CANDIDATES:
+        if Path(path).is_file():
+            return path
+    raise FileNotFoundError(
+        "No CJK font found for PDF export. Install Songti (macOS) or fonts-wqy-zenhei (Linux)."
+    )
 
 
 def render_pdf(
@@ -22,7 +35,7 @@ def render_pdf(
 ) -> bytes:
     """Render PDF from plain lines (legacy) or structured questions with illustrations."""
     pdf = FPDF()
-    pdf.add_font("Songti", fname=_FONT)
+    pdf.add_font("Songti", fname=_resolve_cjk_font())
     pdf.set_font("Songti", size=14)
     pdf.add_page()
     pdf.multi_cell(0, 10, title)
