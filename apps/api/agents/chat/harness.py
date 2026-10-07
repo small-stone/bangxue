@@ -29,7 +29,6 @@ from agents.shared.bailian import (
     require_bailian_api_key,
 )
 from agents.shared.checkpointer import get_checkpointer
-from agents.shared.jev import CompletenessResult, JevConfigError, judge_chat_completeness
 from agents.shared.retrieval import (
     RetrievalError,
     hybrid_retrieve,
@@ -298,16 +297,6 @@ def apply_chat_draft(thread_id: str, transcript: str, decision) -> ChatTurnResul
         "edition": getattr(decision, "edition", "") or "人教版",
         "term": getattr(decision, "term", "") or "上册",
     }
-    # Fall back to Jev completeness for grade if route omitted it.
-    if not scope["grade"]:
-        try:
-            judgment = judge_chat_completeness(transcript)
-            if judgment.grade:
-                scope["grade"] = judgment.grade
-            if judgment.subject:
-                scope["subject"] = judgment.subject
-        except JevConfigError:
-            pass
     if not scope["grade"]:
         return apply_clarify(
             thread_id,
@@ -670,28 +659,6 @@ def _questions_from_agent_result(result: dict[str, Any]) -> list[dict]:
         except json.JSONDecodeError:
             continue
     return []
-
-
-def _meta_from_judgment(judgment: CompletenessResult) -> dict[str, Any]:
-    meta: dict[str, Any] = {}
-    if judgment.grade:
-        meta["grade"] = judgment.grade
-    if judgment.subject:
-        meta["subject"] = judgment.subject
-    return meta
-
-
-def _retrieval_scope(transcript: str, judgment: CompletenessResult) -> dict[str, str]:
-    grade = judgment.grade or ""
-    subject = judgment.subject or "数学"
-    term = "下册" if "下册" in transcript else "上册"
-    return {
-        "stage": "小学",
-        "grade": grade,
-        "subject": subject,
-        "edition": "人教版",
-        "term": term,
-    }
 
 
 def _default_count(text: str) -> int:

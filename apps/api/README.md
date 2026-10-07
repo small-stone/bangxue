@@ -42,7 +42,7 @@ python -m ingest query \
 
 ## 方式 B 混合检索
 
-对话出题在 Jev 判定信息足够后，于 **FastAPI 进程内** 对 `textbook_chunks` 做：
+对话出题在 Supervisor 路由为 `chat_draft`（信息足够）后，于 **FastAPI 进程内** 对 `textbook_chunks` 做：
 
 1. 按学段 / 年级 / 科目 / 版本 / 学期过滤  
 2. **向量检索**（百炼 embedding + pgvector）与 **BM25**（`rank-bm25` + jieba）并行  

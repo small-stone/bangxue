@@ -69,7 +69,7 @@
 - **THEN** 不生成 101 道题草稿，而是提示题量最多 100 道（或请其改到上限内）
 
 ### Requirement: Draft questions after enough intent
-当信息足够时，系统 MUST 先对教材库做混合检索得到相关课文，再使用百炼出题模型（默认 `qwen3.7-plus`，密钥 `bailian_api_key`）基于检索上下文生成题目列表，并展示给家长确认。题目正文 MUST NOT 由 Jev 生成。缺密钥时 MUST 返回明确错误，MUST NOT 编造题目。生成提示 MUST 要求题目紧扣所附课文，不要使用课文外知识点。
+当信息足够时，系统 MUST 先对教材库做混合检索得到相关课文，再使用百炼出题模型（默认 `qwen3.7-plus`，密钥 `bailian_api_key`）基于检索上下文生成题目列表，并展示给家长确认。题目正文 MUST 由百炼出题模型生成，MUST NOT 由路由/判断层生成。缺密钥时 MUST 返回明确错误，MUST NOT 编造题目。生成提示 MUST 要求题目紧扣所附课文，不要使用课文外知识点。
 
 #### Scenario: Enough detail yields a grounded draft list
 - **WHEN** 家长说明科目或知识点、题量等已足够，且检索返回可用课文块
