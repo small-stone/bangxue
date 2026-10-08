@@ -80,7 +80,7 @@ export default function Login() {
               <input
                 inputMode="numeric"
                 maxLength={4}
-                placeholder="请输入邮箱验证码"
+                placeholder="填写 0000 即可"
                 value={code}
                 onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 4))}
               />

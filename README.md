@@ -10,11 +10,11 @@
 
 ### 1. 双 Agent 出题 + 显式 Supervisor 路由
 
-| 能力 | 实现 | 作用 |
-|------|------|------|
-| **方式 A · 教材出题** | LangGraph 固定 StateGraph（`agents/textbook`） | 单元范围 → 一次结构化生成；题量与 JSON schema 受控，禁止模型自行改题量或跑 shell |
-| **方式 B · 对话出题** | DeepAgents harness（`agents/chat`） | 多轮意图、工具调用 `draft_quiz`；**显式剔除**宿主机 `execute` / 写文件等危险工具 |
-| **Supervisor** | LangGraph 编排图（`agents/supervisor`） | 每条家长消息先路由：`clarify` / `chat_draft` / `textbook_quiz`，避免对话栈里静默乱出题 |
+| 能力                  | 实现                                           | 作用                                                                                   |
+| --------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **方式 A · 教材出题** | LangGraph 固定 StateGraph（`agents/textbook`） | 单元范围 → 一次结构化生成；题量与 JSON schema 受控，禁止模型自行改题量或跑 shell       |
+| **方式 B · 对话出题** | DeepAgents harness（`agents/chat`）            | 多轮意图、工具调用 `draft_quiz`；**显式剔除**宿主机 `execute` / 写文件等危险工具       |
+| **Supervisor**        | LangGraph 编排图（`agents/supervisor`）        | 每条家长消息先路由：`clarify` / `chat_draft` / `textbook_quiz`，避免对话栈里静默乱出题 |
 
 对话路径可以 **handoff 到教材图**（明确单元时），确认后仍标记来源为「对话」，双入口下游统一。
 
@@ -33,7 +33,7 @@
 ### 4. 可信运行时：Checkpoint 隔离 + 会话落库
 
 - 生产 Checkpointer 用 **Postgres**（禁止 MemorySaver 默认）。
-- 同一 `thread_id` 上 Supervisor / DeepAgents 使用不同 **`checkpoint_ns`**（`supervisor` vs `chat-agent`），避免状态串台。
+- 同一 `thread_id` 上 Supervisor / DeepAgents 使用不同 `checkpoint_ns`（`supervisor` vs `chat-agent`），避免状态串台。
 - 对话草稿与练习卷权威状态在 PostgreSQL（`chat_sessions` / `quiz_papers`），多 worker / 重启可恢复；缺库 **fail-closed**。
 
 ### 5. 判分与共用工具链
@@ -48,23 +48,23 @@
 
 ---
 
-## 技术栈（一期）
+## 技术栈
 
 - **前端**：Vite + React + TypeScript（移动优先）
 - **后端**：FastAPI + SSE；Agent 进程内
 - **编排**：LangGraph（教材图 / Supervisor / 判分图）+ DeepAgents（对话 harness）
 - **数据**：PostgreSQL + pgvector；Checkpointer / 成绩 / 会话 / 教材块同库或同连接策略
-- **部署**：Docker Compose（`web` + `api` + `db`），见 [`deploy/README.md`](deploy/README.md)
+- **部署**：Docker Compose（`web` + `api` + `db`），见 `[deploy/README.md](deploy/README.md)`
 
 ## 仓库入口
 
-| 路径 | 说明 |
-|------|------|
-| [apps/web](apps/web) | 家长端 SPA |
-| [apps/api](apps/api) | FastAPI；`agents/` = textbook / chat / supervisor / shared |
-| [REQUIREMENTS.md](REQUIREMENTS.md) | 产品需求 |
-| [openspec](openspec) | 行为规格与变更归档 |
-| [docs/mockups](docs/mockups) | 界面参考 |
+| 路径                               | 说明                                                       |
+| ---------------------------------- | ---------------------------------------------------------- |
+| [apps/web](apps/web)               | 家长端 SPA                                                 |
+| [apps/api](apps/api)               | FastAPI；`agents/` = textbook / chat / supervisor / shared |
+| [REQUIREMENTS.md](REQUIREMENTS.md) | 产品需求                                                   |
+| [openspec](openspec)               | 行为规格与变更归档                                         |
+| [docs/mockups](docs/mockups)       | 界面参考                                                   |
 
 ## 本地快速开始
 
