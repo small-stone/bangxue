@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchWrongBook, type WrongBookItem } from '../api'
-import { DemoBadge, PageNav } from '../chrome'
+import { PageNav } from '../chrome'
 import { pickWrongShowcase, type DemoWrongItem } from '../demoShowcase'
 import {
   BookIcon,
