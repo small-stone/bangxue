@@ -1,24 +1,6 @@
-# textbook-quiz-ui Specification
+# Spec Delta
 
-## Purpose
-
-让家长不登录就能按墨金纸感稿走完「首页 → 选题 → 范围 → 设置 → 结果」，并在结果页看到根据一年级数学上册生成的题目。
-
-## Requirements
-
-### Requirement: Home matches the ink-amber mock
-
-首页 MUST 按 `docs/mockups/alt-ink-amber/mockup-00-home.png` 呈现：纸感底、琥珀金主入口「按教材出题」、描边入口「对话出题」、底部「首页 / 成绩 / 我的」。本变更 MUST NOT 要求登录。
-
-#### Scenario: Parent opens the app
-
-- **WHEN** 家长打开站点根路径
-- **THEN** 看到上述首页，且无需登录即可点击「按教材出题」
-
-#### Scenario: Chat entry is visible but not a quiz flow
-
-- **WHEN** 家长点击「对话出题」
-- **THEN** 不进入出题结果，并看到该入口尚未开放的说明
+## MODIFIED Requirements
 
 ### Requirement: Textbook setup screens follow mocks 01 to 03
 
@@ -49,19 +31,7 @@
 - **WHEN** 家长选择任一已开放组合，并选定至少一个已入库单元
 - **THEN** 进入出题设置，且摘要中能看到所选单元
 
-### Requirement: Result screen shows generated questions
-
-练习结果页 MUST 对齐 `mockup-04-pdf.png` 的结构，并展示本次生成的题目原文，而不是稿面里的示例算式。标题 MUST 体现一年级数学和所选范围。
-
-#### Scenario: Questions appear after generation
-
-- **WHEN** 出题接口成功返回
-- **THEN** 结果页列出这些题目，家长无需再打开其他工具即可阅读
-
-#### Scenario: Answer sheet follows the toggle
-
-- **WHEN** 家长在设置中打开「同时生成答案卷」且出题成功
-- **THEN** 结果页提供答案内容；关闭时不展示答案
+## ADDED Requirements
 
 ### Requirement: Select notice lists open subjects
 当当前选择不可继续时，选题页 MUST 用中文说明目前开放：小学数学人教版（一至六上下）、语文统编版（一至六上下）、英语人教版（三至六上下）。MUST NOT 再写「只开放小学数学人教版」作为唯一说明。

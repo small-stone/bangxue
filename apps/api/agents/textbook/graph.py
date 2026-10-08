@@ -99,12 +99,14 @@ def _generate_questions(state: TextbookQuizState) -> dict[str, Any]:
 
     for _ in range(MAX_GENERATE_ATTEMPTS):
         try:
+            meta = state.get("meta") or {}
             questions = build(
                 source_text=source_text,
                 count=count,
                 difficulty=state["difficulty"],
                 include_answers=include_answers,
                 grade=grade,
+                subject=meta.get("subject") or "数学",
             )
         except TextbookError as exc:
             # Client / config errors are not worth retrying.

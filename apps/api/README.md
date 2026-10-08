@@ -28,14 +28,18 @@ export DATABASE_URL=postgresql://bangxue:bangxue@127.0.0.1:5432/bangxue
 python -m ingest ingest \
   --pdf /path/to/book.pdf \
   --stage 小学 --grade 一年级 --subject 数学 --edition 人教版 --term 上册
-# 批量入库 book/小学/数学 下全部人教版 PDF：
+# 批量入库 book/小学/<科目> 下 PDF（数学 / 语文 / 英语）：
+python -m ingest ingest-primary --subject 数学
+python -m ingest ingest-primary --subject 语文
+python -m ingest ingest-primary --subject 英语
+# 兼容旧命令：
 python -m ingest ingest-primary-math
 python -m ingest query \
   --stage 小学 --grade 一年级 --subject 数学 --edition 人教版 --term 上册 \
   --unit 第一单元
 ```
 
-同一五项元数据再次执行会先删除该书旧块再写入。识别不到单元标题时命令失败且不写库。
+同一五项元数据再次执行会先删除该书旧块再写入。识别不到单元标题时会尽量整书入库，避免 RAG 缺书。
 - `agents/chat/` — 方式 B（对话 / DeepAgents）
 - `agents/supervisor/` — 对话请求 **Supervisor**（路由 / 编排图）：追问、对话出题或教材式出题
 - `agents/shared/` — PDF、判分、**教材混合检索**（BM25 + pgvector）等共用能力

@@ -1,10 +1,6 @@
-# primary-math-quiz Specification
+# Spec Delta
 
-## Purpose
-
-让家长对已入库的小学数学人教版各册按单元出题，选题与接口的年级、学期范围一致，不再锁死一年级上册。
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Quiz accepts any ingested primary math PEP volume
 出题与列单元接口 MUST 接受以下已入库小学组合（且 `textbook_chunks` 中已有该五元组的块）：数学 + 人教版 + 一年级至六年级 + 上册或下册；语文 + 统编版 + 一年级至六年级 + 上册或下册；英语 + 人教版 + 三年级至六年级 + 上册或下册。题目 MUST 依据家长所选单元的课文生成。出题提示 MUST 使用请求中的科目，MUST NOT 在语文/英语请求中写死「小学数学」。初中、不在白名单的科目/版本/年级，或该册尚未入库时，接口 MUST 拒绝并说明原因，MUST NOT 编造题目。
@@ -56,12 +52,7 @@
 - **WHEN** 家长选择初中
 - **THEN** 「下一步」不可用，并看到仅开放小学已入库科目的说明
 
-### Requirement: Result reflects the chosen grade and units
-结果页标题 MUST 体现所选年级、科目与单元范围，并列出本次生成的题目。下载练习 PDF 时内容 MUST 与页面题干一致。
-
-#### Scenario: Questions appear for the selected range
-- **WHEN** 出题成功返回
-- **THEN** 结果页列出这些题目，标题含年级与所选单元信息
+## ADDED Requirements
 
 ### Requirement: Quiz prompt follows the selected subject
 方式 A 出题 MUST 按请求元数据中的科目生成系统提示（数学 / 语文 / 英语）。仅当科目为数学时，MAY 要求看图题 `scene`；语文与英语 MUST NOT 依赖数学看图场景字段才能出题。

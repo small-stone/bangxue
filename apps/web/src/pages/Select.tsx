@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { canContinue, loadDraft, saveDraft, type Draft } from '../draft'
+import {
+  OPEN_BOOK_NOTICE,
+  canContinue,
+  defaultEdition,
+  editionsFor,
+  loadDraft,
+  saveDraft,
+  type Draft,
+} from '../draft'
 import { PageNav } from '../chrome'
 import { ChevronRight } from '../icons'
 
@@ -12,15 +20,21 @@ const SUBJECTS = [
   { name: '英语', hint: '听说读写' },
   { name: '更多', hint: '后续开放' },
 ]
-const EDITIONS = ['人教版', '苏教版', '北师大版', '沪教版']
 
 export default function Select() {
   const navigate = useNavigate()
   const [draft, setDraft] = useState<Draft>(loadDraft)
   const ready = canContinue(draft)
+  const editionOptions = editionsFor(draft.subject)
 
   function update(patch: Partial<Draft>) {
     const next = { ...draft, ...patch, units: [] }
+    if (patch.subject !== undefined) {
+      const allowed = editionsFor(patch.subject)
+      if (!allowed.includes(next.edition)) {
+        next.edition = defaultEdition(patch.subject)
+      }
+    }
     setDraft(next)
     saveDraft(next)
   }
@@ -36,7 +50,7 @@ export default function Select() {
       <div className="page">
         <PageNav title="按教材出题" />
         <div className="banner">紧扣课本单元出题</div>
-        {!ready ? <p className="notice">目前只开放小学数学人教版一年级至六年级的上册或下册</p> : null}
+        {!ready ? <p className="notice">{OPEN_BOOK_NOTICE}</p> : null}
         <div className="seg">
           {(['小学', '初中'] as const).map((stage) => (
             <button key={stage} type="button" className={draft.stage === stage ? 'on' : ''} onClick={() => update({ stage })}>
@@ -77,7 +91,7 @@ export default function Select() {
         </div>
         <div className="label">选择教材版本</div>
         <div className="chips">
-          {EDITIONS.map((edition) => (
+          {editionOptions.map((edition) => (
             <button
               key={edition}
               type="button"

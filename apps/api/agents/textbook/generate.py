@@ -1,4 +1,4 @@
-"""Grade-one through grade-six primary math generation from ingested chunks."""
+"""Primary textbook quiz generation from ingested chunks (math / Chinese / English)."""
 
 import json
 from collections.abc import Callable, Sequence
@@ -7,8 +7,22 @@ import psycopg
 
 from ingest.store import connect
 
-PRIMARY_GRADES = {"一年级", "二年级", "三年级", "四年级", "五年级", "六年级"}
+# Keep in sync with apps/web/src/draft.ts allowlist.
+PRIMARY_GRADES_ALL = {"一年级", "二年级", "三年级", "四年级", "五年级", "六年级"}
+PRIMARY_GRADES_EN = {"三年级", "四年级", "五年级", "六年级"}
 PRIMARY_TERMS = {"上册", "下册"}
+_SUBJECT_EDITION_GRADES: dict[str, tuple[str, set[str]]] = {
+    "数学": ("人教版", PRIMARY_GRADES_ALL),
+    "语文": ("统编版", PRIMARY_GRADES_ALL),
+    "英语": ("人教版", PRIMARY_GRADES_EN),
+}
+ALLOWED_BOOK_NOTICE = (
+    "目前开放：小学数学人教版（一至六上下）、语文统编版（一至六上下）、"
+    "英语人教版（三至六上下）。"
+)
+
+# Back-compat alias for older imports / tests.
+PRIMARY_GRADES = PRIMARY_GRADES_ALL
 
 Generator = Callable[..., list[dict]]
 
@@ -22,17 +36,18 @@ class TextbookError(Exception):
 
 
 def is_allowed_book(**meta: str) -> bool:
-    return (
-        meta.get("stage") == "小学"
-        and meta.get("subject") == "数学"
-        and meta.get("edition") == "人教版"
-        and meta.get("grade") in PRIMARY_GRADES
-        and meta.get("term") in PRIMARY_TERMS
-    )
+    if meta.get("stage") != "小学" or meta.get("term") not in PRIMARY_TERMS:
+        return False
+    subject = meta.get("subject") or ""
+    rule = _SUBJECT_EDITION_GRADES.get(subject)
+    if rule is None:
+        return False
+    edition, grades = rule
+    return meta.get("edition") == edition and meta.get("grade") in grades
 
 
 def list_units(**meta: str) -> list[str]:
-    _require_primary_math(**meta)
+    _require_allowed_book(**meta)
     try:
         with connect() as conn:
             names = _unit_names(conn, meta)
@@ -44,7 +59,7 @@ def list_units(**meta: str) -> list[str]:
 
 
 def load_unit_text(units: Sequence[str], **meta: str) -> str:
-    _require_primary_math(**meta)
+    _require_allowed_book(**meta)
     if not units:
         raise TextbookError("请至少选择一个单元。")
     try:
@@ -118,9 +133,13 @@ def generate_questions(
     )
 
 
-def _require_primary_math(**meta: str) -> None:
+def _require_allowed_book(**meta: str) -> None:
     if not is_allowed_book(**meta):
-        raise TextbookError("目前只能出小学数学人教版一年级至六年级的上册或下册。")
+        raise TextbookError(ALLOWED_BOOK_NOTICE)
+
+
+# Back-compat name used by older call sites / tests.
+_require_primary_math = _require_allowed_book
 
 
 def _unit_names(conn: psycopg.Connection, meta: dict[str, str]) -> list[str]:
@@ -150,26 +169,44 @@ def _bailian_generator(**kwargs) -> list[dict]:
 
     include_answers = kwargs["include_answers"]
     grade = kwargs.get("grade") or "一年级"
+    subject = kwargs.get("subject") or "数学"
     answer_rule = "每题包含 answer。" if include_answers else "不要包含 answer 字段。"
+    if subject == "数学":
+        qtypes = "选择题|填空题|计算题"
+        type_ratio = "题型比例：选择题 40%，填空题 30%，计算题 30%。"
+        scene_rules = (
+            "返回 JSON：{\"questions\":[{\"qtype\":\"" + qtypes + "\",\"stem\":\"...\","
+            "\"options\":[\"A. …\",\"B. …\",\"C. …\",\"D. …\"],"
+            "\"scene\":{\"kind\":\"row_of_groups\",\"item\":\"fish|strawberry|apple|star|circle\","
+            "\"groups\":[{\"count\":1to10}]}}]}。"
+            "选择题 MUST 提供 options（至少 4 个 A-D 选项）；填空题和计算题不要 options。"
+            "若题干依赖看图数一数/合起来，MUST 附带 scene（kind 固定为 row_of_groups；"
+            "groups[].count 之和或序数须与题干和答案一致；每组 count 为 1–10）。"
+            "纯计算或不依赖图示的题 MUST NOT 带 scene。"
+            "禁止用「见课文插图」代替 scene；不要输出 SVG 或图片 URL。"
+        )
+        scene_user = "若课文涉及数一数/合起来/看图，请至少出一部分带 scene 的看图题。\n"
+    else:
+        qtypes = "选择题|填空题|简答题"
+        type_ratio = "题型比例：选择题 40%，填空题 40%，简答题 20%。"
+        scene_rules = (
+            "返回 JSON：{\"questions\":[{\"qtype\":\"" + qtypes + "\",\"stem\":\"...\","
+            "\"options\":[\"A. …\",\"B. …\",\"C. …\",\"D. …\"]}]}。"
+            "选择题 MUST 提供 options（至少 4 个 A-D 选项）；填空题和简答题不要 options。"
+            "不要输出 scene、SVG 或图片 URL。"
+        )
+        scene_user = ""
     system = (
-        f"你是{grade}小学数学出题助手。只根据给定课文出题，不要使用课文以外的知识点。"
-        "返回 JSON：{\"questions\":[{\"qtype\":\"选择题|填空题|计算题\",\"stem\":\"...\","
-        "\"options\":[\"A. …\",\"B. …\",\"C. …\",\"D. …\"],"
-        "\"scene\":{\"kind\":\"row_of_groups\",\"item\":\"fish|strawberry|apple|star|circle\","
-        "\"groups\":[{\"count\":1to10}]}}]}。"
-        "选择题 MUST 提供 options（至少 4 个 A-D 选项）；填空题和计算题不要 options。"
-        "若题干依赖看图数一数/合起来，MUST 附带 scene（kind 固定为 row_of_groups；"
-        "groups[].count 之和或序数须与题干和答案一致；每组 count 为 1–10）。"
-        "纯计算或不依赖图示的题 MUST NOT 带 scene。"
-        "禁止用「见课文插图」代替 scene；不要输出 SVG 或图片 URL。"
+        f"你是{grade}小学{subject}出题助手。只根据给定课文出题，不要使用课文以外的知识点。"
+        f"{scene_rules}"
         f"题目数量必须正好是指定数量。{answer_rule}"
         "只返回题目 JSON，不要输出思考过程。"
     )
     user = (
         f"难度：{kwargs['difficulty']}\n"
         f"题量：{kwargs['count']}\n"
-        "题型比例：选择题 40%，填空题 30%，计算题 30%。\n"
-        "若课文涉及数一数/合起来/看图，请至少出一部分带 scene 的看图题。\n"
+        f"{type_ratio}\n"
+        f"{scene_user}"
         f"课文：\n{kwargs['source_text']}"
     )
     try:

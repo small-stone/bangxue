@@ -10,14 +10,16 @@ load_repo_env()
 
 from ingest.catalog import (
     BookTarget,
-    default_primary_math_root,
-    discover_primary_math_pdfs,
-    parse_primary_math_meta,
+    default_primary_subject_root,
+    discover_primary_pdfs,
+    parse_primary_meta,
 )
 from ingest.embed import embed_texts, embedding_dimension
 from ingest.parse import extract_pages
 from ingest.split import UnitSplitError, split_pages
 from ingest.store import connect, count_book, fetch_unit, replace_book
+
+_PRIMARY_SUBJECTS = ("数学", "语文", "英语")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -25,8 +27,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "ingest":
         return _ingest(args)
-    if args.command == "ingest-primary-math":
-        return _ingest_primary_math(args)
+    if args.command in {"ingest-primary", "ingest-primary-math"}:
+        if args.command == "ingest-primary-math":
+            args.subject = "数学"
+        return _ingest_primary(args)
     if args.command == "query":
         return _query(args)
     parser.print_help()
@@ -43,10 +47,26 @@ def _parser() -> argparse.ArgumentParser:
     _add_meta(ingest)
     ingest.add_argument("--pdf", required=True, type=Path, help="Path to one textbook PDF")
     batch = sub.add_parser(
-        "ingest-primary-math",
-        help="Ingest every primary-math PDF under book/小学/数学",
+        "ingest-primary",
+        help="Ingest every primary PDF under book/小学/<subject>",
     )
     batch.add_argument(
+        "--subject",
+        required=True,
+        choices=_PRIMARY_SUBJECTS,
+        help="Subject folder under book/小学",
+    )
+    batch.add_argument(
+        "--root",
+        type=Path,
+        default=None,
+        help="Override book/小学/<subject> root",
+    )
+    math_batch = sub.add_parser(
+        "ingest-primary-math",
+        help="Alias for ingest-primary --subject 数学",
+    )
+    math_batch.add_argument(
         "--root",
         type=Path,
         default=None,
@@ -87,9 +107,10 @@ def _ingest(args: argparse.Namespace) -> int:
     return 0
 
 
-def _ingest_primary_math(args: argparse.Namespace) -> int:
-    root = (args.root or default_primary_math_root()).expanduser().resolve()
-    pdfs = discover_primary_math_pdfs(root)
+def _ingest_primary(args: argparse.Namespace) -> int:
+    subject = args.subject
+    root = (args.root or default_primary_subject_root(subject)).expanduser().resolve()
+    pdfs = discover_primary_pdfs(subject, root)
     if not pdfs:
         print(f"No PDFs under {root}", file=sys.stderr)
         return 1
@@ -97,13 +118,13 @@ def _ingest_primary_math(args: argparse.Namespace) -> int:
     failed: list[tuple[str, str]] = []
     for pdf in pdfs:
         try:
-            target = parse_primary_math_meta(pdf)
+            target = parse_primary_meta(pdf, subject)
         except ValueError as exc:
             failed.append((pdf.name, str(exc)))
             print(f"SKIP {pdf.name}: {exc}", file=sys.stderr)
             continue
         print(
-            f"INGEST {target.grade}{target.term} ({pdf.name}) …",
+            f"INGEST {target.subject} {target.edition} {target.grade}{target.term} ({pdf.name}) …",
             flush=True,
         )
         try:
@@ -113,8 +134,11 @@ def _ingest_primary_math(args: argparse.Namespace) -> int:
             print(f"FAIL {pdf.name}: {exc}", file=sys.stderr)
             continue
         ok += 1
-        print(f"OK {target.grade}{target.term}: {inserted} chunks ({stored} rows).")
-    print(f"Done. success={ok} failed={len(failed)} total={len(pdfs)}")
+        print(
+            f"OK {target.subject} {target.grade}{target.term}: "
+            f"{inserted} chunks ({stored} rows)."
+        )
+    print(f"Done. subject={subject} success={ok} failed={len(failed)} total={len(pdfs)}")
     for name, reason in failed:
         print(f"  failed: {name} — {reason}")
     return 0 if ok else 1
