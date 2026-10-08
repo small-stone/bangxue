@@ -1363,6 +1363,7 @@ button.avatar {
 
 .info-banner {
   margin-top: 14px;
+  margin-bottom: 14px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1371,6 +1372,11 @@ button.avatar {
   background: rgba(196, 122, 26, 0.08);
   color: var(--ink-80);
   font-size: 12px;
+}
+
+.info-banner svg {
+  display: block;
+  flex-shrink: 0;
 }
 
 .score-ring-wrap {
