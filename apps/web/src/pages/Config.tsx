@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageNav } from '../chrome'
-import { loadDraft, saveDraft, saveQuiz, saveQuizError, type Draft } from '../draft'
+import { loadDraft, saveDraft, saveQuiz, saveQuizError, type Draft, type Question } from '../draft'
 
 const COUNTS = [10, 15, 20, 30]
 const LEVELS = ['简单', '适中', '较难']
@@ -15,7 +15,7 @@ type StreamEvent = {
   index?: number
   id?: string
   title?: string
-  questions?: unknown[]
+  questions?: Question[]
   detail?: string
 }
 
@@ -128,7 +128,7 @@ export default function Config() {
           saveQuiz({
             id: String(event.id ?? ''),
             title: String(event.title ?? ''),
-            questions: Array.isArray(event.questions) ? event.questions : [],
+            questions: Array.isArray(event.questions) ? (event.questions as Question[]) : [],
             includeAnswers: draft.includeAnswers,
             count: draft.count,
             difficulty: draft.difficulty,
