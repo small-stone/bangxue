@@ -1,11 +1,17 @@
 """Primary textbook quiz generation from ingested chunks (math / Chinese / English)."""
 
+from __future__ import annotations
+
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from typing import Any
 
 import psycopg
 
 from ingest.store import connect
+
+# Emit a generating status every N streamed model chunks (perceived progress).
+_STREAM_STATUS_EVERY = 6
 
 # Keep in sync with apps/web/src/draft.ts allowlist.
 PRIMARY_GRADES_ALL = {"一年级", "二年级", "三年级", "四年级", "五年级", "六年级"}
@@ -158,15 +164,7 @@ def _unit_names(conn: psycopg.Connection, meta: dict[str, str]) -> list[str]:
         return [row[0] for row in cur.fetchall()]
 
 
-def _bailian_generator(**kwargs) -> list[dict]:
-    """One-shot JSON quiz generation via the shared Bailian chat model factory."""
-    from agents.shared.bailian import BailianConfigError, build_chat_model
-
-    try:
-        model = build_chat_model().bind(response_format={"type": "json_object"})
-    except BailianConfigError as exc:
-        raise TextbookError(str(exc), 503) from exc
-
+def _quiz_prompts(**kwargs: Any) -> tuple[str, str]:
     include_answers = kwargs["include_answers"]
     grade = kwargs.get("grade") or "一年级"
     subject = kwargs.get("subject") or "数学"
@@ -209,21 +207,67 @@ def _bailian_generator(**kwargs) -> list[dict]:
         f"{scene_user}"
         f"课文：\n{kwargs['source_text']}"
     )
+    return system, user
+
+
+def _content_text(content: Any) -> str:
+    if content is None:
+        return ""
+    if isinstance(content, list):
+        return "".join(
+            part.get("text", "") if isinstance(part, dict) else str(part) for part in content
+        )
+    return str(content)
+
+
+def iter_bailian_raw_questions(**kwargs: Any) -> Iterator[dict[str, Any]]:
+    """Stream Bailian tokens, yield status events, then raw_questions.
+
+    Uses LangChain ``.stream``; ``enable_thinking: false`` comes from ``build_chat_model``.
+    Incremental mid-stream JSON parse is intentionally skipped — only status + final parse —
+    so the completion path stays reliable (see design: status-first, question events after validate).
+    """
+    from agents.shared.bailian import BailianConfigError, build_chat_model
+
     try:
-        message = model.invoke(
+        model = build_chat_model().bind(response_format={"type": "json_object"})
+    except BailianConfigError as exc:
+        raise TextbookError(str(exc), 503) from exc
+
+    system, user = _quiz_prompts(**kwargs)
+    count = int(kwargs["count"])
+    yield {
+        "type": "status",
+        "phase": "generating",
+        "message": "大模型正在生成题目…",
+        "total": count,
+    }
+
+    parts: list[str] = []
+    chunk_n = 0
+    try:
+        for chunk in model.stream(
             [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ]
-        )
+        ):
+            text = _content_text(getattr(chunk, "content", None))
+            if not text:
+                continue
+            parts.append(text)
+            chunk_n += 1
+            if chunk_n % _STREAM_STATUS_EVERY == 0:
+                yield {
+                    "type": "status",
+                    "phase": "generating",
+                    "message": f"正在生成题目…（已收到 {chunk_n} 段输出）",
+                    "total": count,
+                }
     except Exception as exc:  # noqa: BLE001
         raise TextbookError(f"暂时无法出题：{exc}", 503) from exc
 
-    content = getattr(message, "content", None) or ""
-    if isinstance(content, list):
-        content = "".join(
-            part.get("text", "") if isinstance(part, dict) else str(part) for part in content
-        )
+    content = "".join(parts)
     try:
         payload = json.loads(content or "{}")
     except json.JSONDecodeError as exc:
@@ -231,4 +275,12 @@ def _bailian_generator(**kwargs) -> list[dict]:
     questions = payload.get("questions")
     if not isinstance(questions, list):
         raise TextbookError("模型没有返回题目列表。", 502)
-    return questions
+    yield {"type": "raw_questions", "questions": questions}
+
+
+def _bailian_generator(**kwargs: Any) -> list[dict]:
+    """One-shot JSON quiz generation via Bailian (stream accumulate + parse)."""
+    for event in iter_bailian_raw_questions(**kwargs):
+        if event["type"] == "raw_questions":
+            return event["questions"]
+    raise TextbookError("模型没有返回题目列表。", 502)

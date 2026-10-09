@@ -10,6 +10,7 @@ from agents.textbook.generate import (
     load_unit_text,
 )
 from agents.textbook.graph import build_graph, run_textbook_quiz
+from agents.textbook.stream import collect_textbook_questions, iter_textbook_quiz_events
 
 placeholder = "textbook"
 
@@ -18,8 +19,10 @@ __all__ = [
     "PRIMARY_TERMS",
     "TextbookError",
     "build_graph",
+    "collect_textbook_questions",
     "generate_questions",
     "is_allowed_book",
+    "iter_textbook_quiz_events",
     "list_units",
     "load_unit_text",
     "placeholder",

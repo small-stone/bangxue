@@ -1,30 +1,67 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageNav } from '../chrome'
 import { loadDraft, saveDraft, saveQuiz, saveQuizError, type Draft } from '../draft'
 
 const COUNTS = [10, 15, 20, 30]
 const LEVELS = ['简单', '适中', '较难']
-const LOADING_LINES = [
-  '正在对照这一单元的课文',
-  '大模型即将计算好题目',
-  '正在按难度和题型整理',
-  '练习卷马上就好',
-]
+
+type StreamEvent = {
+  type?: string
+  phase?: string
+  message?: string
+  done?: number
+  total?: number
+  index?: number
+  id?: string
+  title?: string
+  questions?: unknown[]
+  detail?: string
+}
+
+async function* readSse(response: Response): AsyncGenerator<StreamEvent> {
+  const reader = response.body?.getReader()
+  if (!reader) {
+    throw new Error('no body')
+  }
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const chunks = buffer.split('\n\n')
+    buffer = chunks.pop() ?? ''
+    for (const chunk of chunks) {
+      const dataLine = chunk
+        .split('\n')
+        .map((line) => line.trimEnd())
+        .find((line) => line.startsWith('data:'))
+      if (!dataLine) continue
+      const raw = dataLine.slice(5).trim()
+      if (!raw) continue
+      try {
+        yield JSON.parse(raw) as StreamEvent
+      } catch {
+        // ignore malformed frames
+      }
+    }
+  }
+}
 
 export default function Config() {
   const navigate = useNavigate()
   const [draft, setDraft] = useState<Draft>(loadDraft)
   const [busy, setBusy] = useState(false)
-  const [line, setLine] = useState(0)
+  const [statusText, setStatusText] = useState('正在准备出题…')
+  const [progress, setProgress] = useState<{ done?: number; total?: number }>({})
+  const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
-    if (!busy) return
-    const timer = window.setInterval(() => {
-      setLine((current) => (current + 1) % LOADING_LINES.length)
-    }, 1600)
-    return () => window.clearInterval(timer)
-  }, [busy])
+    return () => {
+      abortRef.current?.abort()
+    }
+  }, [])
 
   function update(patch: Partial<Draft>) {
     const next = { ...draft, ...patch }
@@ -34,12 +71,17 @@ export default function Config() {
 
   async function start() {
     if (busy || draft.units.length === 0) return
-    setLine(0)
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    setStatusText('正在连接出题服务…')
+    setProgress({ total: draft.count })
     setBusy(true)
     try {
-      const response = await fetch('/api/quizzes', {
+      const response = await fetch('/api/quizzes/stream', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+        signal: controller.signal,
         body: JSON.stringify({
           stage: draft.stage,
           grade: draft.grade,
@@ -52,27 +94,76 @@ export default function Config() {
           include_answers: draft.includeAnswers,
         }),
       })
-      const body = await response.json()
-      if (!response.ok) {
-        saveQuizError(typeof body.detail === 'string' ? body.detail : '暂时无法出题')
-      } else {
-        saveQuiz({
-          id: body.id,
-          title: body.title,
-          questions: body.questions,
-          includeAnswers: draft.includeAnswers,
-          count: draft.count,
-          difficulty: draft.difficulty,
-        })
+      if (!response.ok || !response.body) {
+        let detail = '暂时无法出题'
+        try {
+          const body = await response.json()
+          if (typeof body.detail === 'string') detail = body.detail
+        } catch {
+          // keep default
+        }
+        saveQuizError(detail)
+        navigate('/textbook/result')
+        return
       }
-      navigate('/textbook/result')
-    } catch {
+
+      let finished = false
+      for await (const event of readSse(response)) {
+        if (controller.signal.aborted) return
+        if (event.type === 'status') {
+          if (typeof event.message === 'string' && event.message) {
+            setStatusText(event.message)
+          }
+          setProgress((prev) => ({
+            done: typeof event.done === 'number' ? event.done : prev.done,
+            total: typeof event.total === 'number' ? event.total : prev.total ?? draft.count,
+          }))
+        } else if (event.type === 'question') {
+          const done = typeof event.done === 'number' ? event.done : (event.index ?? 0) + 1
+          const total = typeof event.total === 'number' ? event.total : draft.count
+          setProgress({ done, total })
+          setStatusText(`已整理 ${done}/${total} 题`)
+        } else if (event.type === 'done') {
+          finished = true
+          saveQuiz({
+            id: String(event.id ?? ''),
+            title: String(event.title ?? ''),
+            questions: Array.isArray(event.questions) ? event.questions : [],
+            includeAnswers: draft.includeAnswers,
+            count: draft.count,
+            difficulty: draft.difficulty,
+          })
+          navigate('/textbook/result')
+          return
+        } else if (event.type === 'error') {
+          finished = true
+          saveQuizError(typeof event.detail === 'string' ? event.detail : '暂时无法出题')
+          navigate('/textbook/result')
+          return
+        }
+      }
+      if (!finished) {
+        saveQuizError('出题中断，请重试')
+        navigate('/textbook/result')
+      }
+    } catch (err) {
+      if (controller.signal.aborted) return
       saveQuizError('暂时无法出题')
       navigate('/textbook/result')
     } finally {
+      if (abortRef.current === controller) {
+        abortRef.current = null
+      }
       setBusy(false)
     }
   }
+
+  const progressLabel =
+    typeof progress.done === 'number' && typeof progress.total === 'number'
+      ? `${progress.done}/${progress.total}`
+      : typeof progress.total === 'number'
+        ? `共 ${progress.total} 题`
+        : ''
 
   return (
     <div className="app-shell">
@@ -141,9 +232,14 @@ export default function Config() {
             <p id="quiz-loading-title" className="loading-kicker">
               大模型正在出题
             </p>
-            <p className="loading-line" key={line} aria-live="polite">
-              {LOADING_LINES[line]}
+            <p className="loading-line" aria-live="polite">
+              {statusText}
             </p>
+            {progressLabel ? (
+              <p className="loading-line" style={{ opacity: 0.75, marginTop: 8 }}>
+                {progressLabel}
+              </p>
+            ) : null}
           </div>
         </div>
       ) : null}

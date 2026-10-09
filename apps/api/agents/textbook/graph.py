@@ -151,29 +151,20 @@ def run_textbook_quiz(
     source_text: str | None = None,
     **meta: str,
 ) -> list[dict]:
-    """Invoke the textbook graph and raise TextbookError on failure."""
-    state: TextbookQuizState = {
-        "meta": {
-            "stage": meta["stage"],
-            "grade": meta["grade"],
-            "subject": meta["subject"],
-            "edition": meta["edition"],
-            "term": meta["term"],
-        },
-        "units": list(units),
-        "count": count,
-        "difficulty": difficulty,
-        "include_answers": include_answers,
-        "grade": meta.get("grade") or "一年级",
-    }
-    if source_text is not None:
-        state["source_text"] = source_text
-    if generator is not None:
-        state["generator"] = generator
-    out = build_graph().invoke(state)
-    if out.get("error"):
-        raise TextbookError(str(out["error"]), int(out.get("error_status") or 400))
-    questions = out.get("questions")
-    if not isinstance(questions, list):
-        raise TextbookError("题目数量与设置不一致，请重试。", 502)
-    return questions
+    """Run the shared stream pipeline (sync) and raise TextbookError on failure.
+
+    SSE and ``POST /api/quizzes`` both use this core via ``iter_textbook_quiz_events`` /
+    ``collect_textbook_questions``. The compiled StateGraph remains available for
+    direct ``build_graph().invoke`` call sites.
+    """
+    from agents.textbook.stream import collect_textbook_questions
+
+    return collect_textbook_questions(
+        units=units,
+        count=count,
+        difficulty=difficulty,
+        include_answers=include_answers,
+        generator=generator,
+        source_text=source_text,
+        **meta,
+    )
