@@ -608,11 +608,14 @@ def _draft_via_agent(
     try:
         checkpointer = get_checkpointer()
         agent = build_agent(checkpointer=checkpointer)
-        config = {
+        from agents.shared.observability import observe_llm_call
+
+        config: dict = {
             "configurable": {
                 "thread_id": thread_id,
                 "checkpoint_ns": CHAT_CHECKPOINT_NS,
-            }
+            },
+            "run_name": "chat-draft",
         }
         prompt = (
             f"家长需求如下，请调用 draft_quiz 生成题目（必须紧扣已检索课文）。\n"
@@ -620,10 +623,17 @@ def _draft_via_agent(
             f"count: {count}\n"
             f"difficulty: 适中"
         )
-        result = agent.invoke(
-            {"messages": [HumanMessage(content=prompt)]},
-            config=config,
-        )
+        with observe_llm_call(
+            path="chat",
+            session_id=thread_id,
+            metadata={"grade": grade, "subject": subject, "count": count},
+        ) as handler:
+            if handler is not None:
+                config["callbacks"] = [handler]
+            result = agent.invoke(
+                {"messages": [HumanMessage(content=prompt)]},
+                config=config,
+            )
         questions = _questions_from_agent_result(result)
         if questions:
             return questions

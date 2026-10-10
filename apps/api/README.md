@@ -42,17 +42,17 @@ python -m ingest query \
 同一五项元数据再次执行会先删除该书旧块再写入。识别不到单元标题时会尽量整书入库，避免 RAG 缺书。
 - `agents/chat/` — 方式 B（对话 / DeepAgents）
 - `agents/supervisor/` — 对话请求 **Supervisor**（路由 / 编排图）：追问、对话出题或教材式出题
-- `agents/shared/` — PDF、判分、**教材混合检索**（BM25 + pgvector）等共用能力
+- `agents/shared/` — PDF、判分、**教材混合检索**（LangChain Retriever + EnsembleRetriever）等共用能力
 
 ## 方式 B 混合检索
 
 对话出题在 Supervisor 路由为 `chat_draft`（信息足够）后，于 **FastAPI 进程内** 对 `textbook_chunks` 做：
 
 1. 按学段 / 年级 / 科目 / 版本 / 学期过滤  
-2. **向量检索**（百炼 embedding + pgvector）与 **BM25**（`rank-bm25` + jieba）并行  
-3. RRF 融合 Top-K 课文，再交给百炼出题  
+2. 稠密 Retriever（百炼 embedding + pgvector）与稀疏 Retriever（`rank-bm25` + jieba）  
+3. LangChain **`EnsembleRetriever`（RRF）** 融合 Top-K 课文，再交给百炼出题  
 
-无命中时追问，不静默编题。依赖见 `requirements.txt` 中的 `rank-bm25`、`jieba`。
+表仍为自建 `textbook_chunks`，**未**迁到 LangChain PGVector collection。无命中时追问，不静默编题。依赖见 `requirements.txt`（含 `langchain-community`、`rank-bm25`、`jieba`）。
 
 ## 本地运行
 

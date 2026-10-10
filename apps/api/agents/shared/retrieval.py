@@ -1,26 +1,28 @@
-"""Hybrid textbook retrieval: metadata filter + BM25 + pgvector + RRF."""
+"""Hybrid textbook retrieval facade: metadata scope + LangChain EnsembleRetriever."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Sequence
 
-import jieba
-from rank_bm25 import BM25Okapi
+from agents.shared.retrievers import (
+    RetrievalError,
+    build_textbook_ensemble,
+    load_scoped_candidates,
+)
 
-from ingest.embed import embed_texts
-from ingest.store import _vector_literal, connect
-
-_RRF_K = 60
 _DEFAULT_TOP_K = 8
-_CANDIDATE_LIMIT = 200
-_DENSE_POOL = 24
-_SPARSE_POOL = 24
+_ENSEMBLE_C = 60
 _MAX_CONTEXT_CHARS = 8000
 
-
-class RetrievalError(RuntimeError):
-    """Configuration or infrastructure failure during retrieval."""
+__all__ = [
+    "RetrievalError",
+    "RetrievedChunk",
+    "format_chunks_for_debug",
+    "hybrid_retrieve",
+    "join_chunk_texts",
+    "retrieval_summary",
+]
 
 
 @dataclass(frozen=True)
@@ -46,7 +48,7 @@ def hybrid_retrieve(
     term: str = "上册",
     top_k: int = _DEFAULT_TOP_K,
 ) -> list[RetrievedChunk]:
-    """Return fused Top-K chunks for the book scope. Empty list = no hit."""
+    """Return fused Top-K chunks for the book scope via EnsembleRetriever."""
     q = (query or "").strip()
     if not q:
         return []
@@ -54,7 +56,7 @@ def hybrid_retrieve(
         raise RetrievalError("检索需要学段、年级、科目、版本与学期。")
 
     try:
-        candidates = _load_candidates(
+        candidates = load_scoped_candidates(
             stage=stage,
             grade=grade,
             subject=subject,
@@ -68,37 +70,38 @@ def hybrid_retrieve(
         return []
 
     try:
-        dense = _dense_rank(q, meta=(stage, grade, subject, edition, term), limit=_DENSE_POOL)
-    except RuntimeError as exc:
+        ensemble = build_textbook_ensemble(
+            stage=stage,
+            grade=grade,
+            subject=subject,
+            edition=edition,
+            term=term,
+            candidates=candidates,
+        )
+        docs = ensemble.invoke(q)
+    except RetrievalError:
+        raise
+    except Exception as exc:  # noqa: BLE001
         raise RetrievalError(str(exc)) from exc
 
-    sparse = _bm25_rank(q, candidates, limit=_SPARSE_POOL)
-    fused_ids = _rrf_fuse(
-        [c.id for c in dense],
-        [c.id for c in sparse],
-        top_k=top_k,
-    )
-    by_id = {c.id: c for c in candidates}
-    # Dense may include rows not in the BM25 candidate slice; re-fetch those if needed.
-    for chunk in dense:
-        by_id.setdefault(chunk.id, chunk)
-
     out: list[RetrievedChunk] = []
-    for rank, chunk_id in enumerate(fused_ids):
-        chunk = by_id.get(chunk_id)
-        if chunk is None:
+    for rank, doc in enumerate(docs[:top_k]):
+        meta = doc.metadata or {}
+        try:
+            chunk_id = int(meta["id"])
+        except (KeyError, TypeError, ValueError):
             continue
         out.append(
             RetrievedChunk(
-                id=chunk.id,
-                unit_name=chunk.unit_name,
-                content=chunk.content,
-                stage=chunk.stage,
-                grade=chunk.grade,
-                subject=chunk.subject,
-                edition=chunk.edition,
-                term=chunk.term,
-                score=1.0 / (_RRF_K + rank + 1),
+                id=chunk_id,
+                unit_name=str(meta.get("unit_name") or ""),
+                content=str(doc.page_content or ""),
+                stage=str(meta.get("stage") or stage),
+                grade=str(meta.get("grade") or grade),
+                subject=str(meta.get("subject") or subject),
+                edition=str(meta.get("edition") or edition),
+                term=str(meta.get("term") or term),
+                score=1.0 / (_ENSEMBLE_C + rank + 1),
             )
         )
     return out
@@ -135,112 +138,6 @@ def retrieval_summary(
             units.append(chunk.unit_name)
     unit_bit = "、".join(units[:5]) if units else "无单元命中"
     return f"{stage}{grade}{subject}{edition}{term} · {unit_bit}"
-
-
-def _load_candidates(
-    *,
-    stage: str,
-    grade: str,
-    subject: str,
-    edition: str,
-    term: str,
-) -> list[RetrievedChunk]:
-    with connect() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, unit_name, content, stage, grade, subject, edition, term
-                FROM textbook_chunks
-                WHERE stage = %s AND grade = %s AND subject = %s
-                  AND edition = %s AND term = %s
-                ORDER BY page_start, id
-                LIMIT %s
-                """,
-                (stage, grade, subject, edition, term, _CANDIDATE_LIMIT),
-            )
-            rows = cur.fetchall()
-    return [
-        RetrievedChunk(
-            id=int(row[0]),
-            unit_name=str(row[1]),
-            content=str(row[2]),
-            stage=str(row[3]),
-            grade=str(row[4]),
-            subject=str(row[5]),
-            edition=str(row[6]),
-            term=str(row[7]),
-        )
-        for row in rows
-    ]
-
-
-def _dense_rank(
-    query: str,
-    *,
-    meta: tuple[str, str, str, str, str],
-    limit: int,
-) -> list[RetrievedChunk]:
-    vectors = embed_texts([query])
-    if not vectors or not vectors[0]:
-        raise RetrievalError("查询向量为空。")
-    literal = _vector_literal(vectors[0])
-    stage, grade, subject, edition, term = meta
-    with connect() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, unit_name, content, stage, grade, subject, edition, term
-                FROM textbook_chunks
-                WHERE stage = %s AND grade = %s AND subject = %s
-                  AND edition = %s AND term = %s
-                ORDER BY embedding <=> %s::vector
-                LIMIT %s
-                """,
-                (stage, grade, subject, edition, term, literal, limit),
-            )
-            rows = cur.fetchall()
-    return [
-        RetrievedChunk(
-            id=int(row[0]),
-            unit_name=str(row[1]),
-            content=str(row[2]),
-            stage=str(row[3]),
-            grade=str(row[4]),
-            subject=str(row[5]),
-            edition=str(row[6]),
-            term=str(row[7]),
-        )
-        for row in rows
-    ]
-
-
-def _tokenize(text: str) -> list[str]:
-    tokens = [t.strip() for t in jieba.lcut(text) if t.strip() and not t.isspace()]
-    return tokens or [text]
-
-
-def _bm25_rank(query: str, candidates: Sequence[RetrievedChunk], *, limit: int) -> list[RetrievedChunk]:
-    if not candidates:
-        return []
-    corpus = [_tokenize(c.content) for c in candidates]
-    bm25 = BM25Okapi(corpus)
-    scores = bm25.get_scores(_tokenize(query))
-    ranked = sorted(zip(candidates, scores, strict=True), key=lambda item: item[1], reverse=True)
-    # Keep positive scores first; if all zero, still return top by order for recall.
-    positive = [chunk for chunk, score in ranked if score > 0]
-    if positive:
-        return positive[:limit]
-    return [chunk for chunk, _ in ranked[:limit]]
-
-
-def _rrf_fuse(dense_ids: Sequence[int], sparse_ids: Sequence[int], *, top_k: int) -> list[int]:
-    scores: dict[int, float] = {}
-    for rank, doc_id in enumerate(dense_ids):
-        scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (_RRF_K + rank + 1)
-    for rank, doc_id in enumerate(sparse_ids):
-        scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (_RRF_K + rank + 1)
-    ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
-    return [doc_id for doc_id, _ in ordered[:top_k]]
 
 
 def format_chunks_for_debug(chunks: Sequence[RetrievedChunk]) -> list[dict[str, Any]]:

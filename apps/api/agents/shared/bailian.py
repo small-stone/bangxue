@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from typing import Any
 
 from langchain_openai import ChatOpenAI
 
@@ -30,12 +31,17 @@ def bailian_base_url() -> str:
 
 
 def build_chat_model(*, temperature: float = 0.2) -> ChatOpenAI:
-    """Return a LangChain chat model pointed at Bailian's OpenAI-compatible API."""
-    return ChatOpenAI(
-        api_key=require_bailian_api_key(),
-        base_url=bailian_base_url(),
-        model=quiz_model_name(),
-        temperature=temperature,
+    """Return a LangChain chat model pointed at Bailian's OpenAI-compatible API.
+
+    Langfuse: pass ``CallbackHandler`` via ``observe_llm_call`` /
+    ``observability_run_config`` at invoke/stream time (SDK v4 best practice).
+    """
+    kwargs: dict[str, Any] = {
+        "api_key": require_bailian_api_key(),
+        "base_url": bailian_base_url(),
+        "model": quiz_model_name(),
+        "temperature": temperature,
         # Bailian thinking tokens must not leak into tool/JSON content.
-        extra_body={"enable_thinking": False},
-    )
+        "extra_body": {"enable_thinking": False},
+    }
+    return ChatOpenAI(**kwargs)

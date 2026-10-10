@@ -174,6 +174,7 @@ docker compose exec db \
 - **百炼从海外调用**：延迟与连通性需实测；密钥只放 `.env`，勿写入 Dockerfile。
 - **长请求**：Nginx 对 `/api` 的 `proxy_read_timeout` 为 300s，覆盖常规对话 SSE / 出题。
 - **本地开发**仍可用 `vite` + `uvicorn`，不必强制走 compose。
+- **Langfuse（可选）**：在 `.env` 设置 `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY` + `LANGFUSE_BASE_URL`（如 `https://jp.cloud.langfuse.com`）后，API 用 SDK v4 + LangChain `CallbackHandler` / `langfuse.openai` 上报教材出题、对话、Supervisor、判分视觉调用。未配置或上报失败时**不影响**家长路径（fail-open）。Compose **不**自带 Langfuse 服务。开启后，发给百炼的 prompt（含课文片段）会进入所配置的 Base URL，请自行评估隐私。
 
 ## 停止
 

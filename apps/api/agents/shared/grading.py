@@ -101,7 +101,13 @@ def _parse_vision_json(text: str) -> list[dict]:
 
 
 def vision_grade(questions: list[dict], image_paths: list[Path]) -> GradeResult:
-    from openai import OpenAI
+    # Prefer Langfuse OpenAI drop-in when keys are configured (captures generations).
+    from agents.shared.observability import langfuse_configured, observe_llm_call
+
+    if langfuse_configured():
+        from langfuse.openai import OpenAI
+    else:
+        from openai import OpenAI
 
     api_key = require_bailian_api_key()
     client = OpenAI(api_key=api_key, base_url=bailian_base_url(), timeout=GRADING_TIMEOUT_SEC)
@@ -125,11 +131,15 @@ def vision_grade(questions: list[dict], image_paths: list[Path]) -> GradeResult:
     for path in image_paths:
         content.append({"type": "image_url", "image_url": {"url": _image_data_url(path)}})
 
-    response = client.chat.completions.create(
-        model=_vision_model(),
-        messages=[{"role": "user", "content": content}],
-        temperature=0,
-    )
+    create_kwargs: dict[str, Any] = {
+        "model": _vision_model(),
+        "messages": [{"role": "user", "content": content}],
+        "temperature": 0,
+    }
+    if langfuse_configured():
+        create_kwargs["name"] = "vision-grade"
+    with observe_llm_call(path="grading", metadata={"n_questions": len(questions)}):
+        response = client.chat.completions.create(**create_kwargs)
     text = (response.choices[0].message.content or "").strip()
     parsed = _parse_vision_json(text)
     by_index = {int(row.get("index", 0)): row for row in parsed if isinstance(row, dict)}

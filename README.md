@@ -6,7 +6,7 @@
 
 ---
 
-## 面试可讲的 Agent 亮点
+## Agent 亮点
 
 ### 1. 双 Agent 出题 + 显式 Supervisor 路由
 
@@ -24,11 +24,11 @@
 - 好处：共享 Postgres / Checkpointer / 密钥与会话；少一层网络与部署单元；适合一期单机 Compose。
 - 约束写进 OpenSpec：`repo-layout` / `agent-runtime` — **默认不拆独立 Agent 服务**。
 
-### 3. Grounded 生成：混合检索 RAG
+### 3. Grounded 生成：元数据过滤 + 混合检索 RAG
 
-对话出题在草稿前对 `textbook_chunks` 做 **BM25 + pgvector 向量** 并行检索，RRF 融合后再给百炼出题；无命中则追问，**禁止无课文 grounding 时静默编题**。
+对话出题在草稿前对 `textbook_chunks` **先按学段 / 年级 / 科目 / 版本 / 学期过滤册次**（禁止无过滤扫全库，避免窜年级或科目），再经 LangChain **稠密 / 稀疏 Retriever** + **`EnsembleRetriever`（RRF）** 融合 Top-K 后给百炼出题；表仍为自建 `textbook_chunks`（pgvector），未迁 LangChain PGVector collection。无命中则追问，**禁止无课文 grounding 时静默编题**。
 
-离线 `ingest/`：PDF 切单元 → embedding → pgvector；与在线出题图解耦。
+离线 `ingest/`：从 PDF 路径解析元数据 → 切单元 → embedding → 写入带元数据索引的 pgvector 表；与在线出题图解耦。
 
 ### 4. 可信运行时：Checkpoint 隔离 + 会话落库
 
@@ -44,7 +44,7 @@
 
 ### 6. Spec 驱动交付（OpenSpec）
 
-需求与行为写在 `openspec/specs/`；变更走 propose → apply → archive。面试时可讲：**如何用规格约束 Agent 边界**（不操作宿主机、不跳过确认、路由封闭集合等），而不是只堆 prompt。
+需求与行为写在 `openspec/specs/`；变更走 propose → apply → archive。**如何用规格约束 Agent 边界**（不操作宿主机、不跳过确认、路由封闭集合等），而不是只堆 prompt。
 
 ---
 

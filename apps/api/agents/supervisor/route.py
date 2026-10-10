@@ -155,12 +155,20 @@ def _llm_route(text: str) -> RouteDecision:
         "家长明确某年级某册某单元+题量时用 textbook_quiz，units 填单元名。"
         "其他足够意图用 chat_draft。"
     )
-    message = model.invoke(
-        [
-            {"role": "system", "content": system},
-            {"role": "user", "content": text},
-        ]
-    )
+    from agents.shared.observability import observe_llm_call
+
+    with observe_llm_call(path="supervisor") as handler:
+        invoke_model = (
+            model.with_config({"callbacks": [handler], "run_name": "supervisor-route"})
+            if handler is not None
+            else model
+        )
+        message = invoke_model.invoke(
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": text},
+            ]
+        )
     content = getattr(message, "content", None) or "{}"
     if isinstance(content, list):
         content = "".join(

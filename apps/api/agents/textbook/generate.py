@@ -228,6 +228,7 @@ def iter_bailian_raw_questions(**kwargs: Any) -> Iterator[dict[str, Any]]:
     so the completion path stays reliable (see design: status-first, question events after validate).
     """
     from agents.shared.bailian import BailianConfigError, build_chat_model
+    from agents.shared.observability import observe_llm_call
 
     try:
         model = build_chat_model().bind(response_format={"type": "json_object"})
@@ -246,24 +247,39 @@ def iter_bailian_raw_questions(**kwargs: Any) -> Iterator[dict[str, Any]]:
     parts: list[str] = []
     chunk_n = 0
     try:
-        for chunk in model.stream(
-            [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ]
-        ):
-            text = _content_text(getattr(chunk, "content", None))
-            if not text:
-                continue
-            parts.append(text)
-            chunk_n += 1
-            if chunk_n % _STREAM_STATUS_EVERY == 0:
-                yield {
-                    "type": "status",
-                    "phase": "generating",
-                    "message": f"正在生成题目…（已收到 {chunk_n} 段输出）",
-                    "total": count,
-                }
+        with observe_llm_call(
+            path="textbook",
+            metadata={
+                "grade": kwargs.get("grade") or "",
+                "subject": kwargs.get("subject") or "",
+                "count": count,
+            },
+        ) as handler:
+            stream_model = (
+                model.with_config({"callbacks": [handler], "run_name": "textbook-quiz"})
+                if handler is not None
+                else model
+            )
+            for chunk in stream_model.stream(
+                [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ]
+            ):
+                text = _content_text(getattr(chunk, "content", None))
+                if not text:
+                    continue
+                parts.append(text)
+                chunk_n += 1
+                if chunk_n % _STREAM_STATUS_EVERY == 0:
+                    yield {
+                        "type": "status",
+                        "phase": "generating",
+                        "message": f"正在生成题目…（已收到 {chunk_n} 段输出）",
+                        "total": count,
+                    }
+    except TextbookError:
+        raise
     except Exception as exc:  # noqa: BLE001
         raise TextbookError(f"暂时无法出题：{exc}", 503) from exc
 
